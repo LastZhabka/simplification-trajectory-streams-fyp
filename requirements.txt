@@ -1,0 +1,11 @@
+# Python 3.10 or later.
+#
+# Only src/viz needs anything installed. src/trajio is standard library only, by
+# design -- the dataset readers must run anywhere, including on a machine with no
+# packages available.
+#
+# The floors are not arbitrary: matplotlib below 3.9 is built against NumPy 1.x and
+# fails to import at all under NumPy 2, which is the breakage the venv below exists
+# to avoid. Keep them in step.
+matplotlib>=3.9
+numpy>=2.0

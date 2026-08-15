@@ -1,0 +1,56 @@
+# CLAUDE.md
+
+Streaming δ-simplification of trajectory streams under the continuous Fréchet distance.
+FYP. The algorithm is being rewritten; what exists now is the tooling around it.
+
+## Style
+
+- Short, simple, direct. No cleverness, no layers that do not earn their place.
+- **No comments.** Names carry the meaning. Comment only a non-obvious *why*.
+- **No defensive `try`/`except`.** Catch only what you can actually handle. Let it crash.
+- No speculative abstraction — no options, hooks or base classes without a second caller.
+- Match the file you are editing.
+- Log every change in `UPDATES.md` as a new numbered entry.
+
+## Map
+
+| Path | What | Why it is like this |
+|---|---|---|
+| `src/trajio/` | Python. Dataset formats → our format. | Standard library only. Readers must run anywhere, and dataset parsing must not depend on the plotting stack. Values are copied verbatim — filtering is a modelling decision, not a reader's. |
+| `src/algo/` | C++20 library `ssk`. Reads our format. | No third-party libraries; the build works offline, hence the hand-rolled JSON in `io/json`. `src/algo` is the include root, so headers are `#include "io/..."`. Algorithm tracks land beside `io/`. |
+| `src/viz/` | Python. Renders trajectories and results. | The only part that needs installed packages (matplotlib, `Agg` backend). |
+| `data/` | `downloads/` `trajectories/` `synthetic/` `renders/` | All git-ignored. Gigabytes, and licence-restricted. Commands are committed, data is not. |
+| `tests/` | C++ unit tests. | Own ~60-line harness — GoogleTest via FetchContent would break an offline configure. |
+| `docs/` | `datasets.md`, `trajio.md` | Measured numbers, not quoted ones. |
+| `scripts/` | Entry points, experiment drivers. | Empty so far. |
+
+**One format everywhere:** `{"dim": 2, "name": "...", "points": [[x, y], ...]}`. trajio
+writes it, `algo/io` reads it, `viz` draws it. A *result* document adds `algorithm`,
+`mode`, `params`, `stats`, `input_points`, `frechet`. No CSV output anywhere — the CSV in
+the repo is dataset input only.
+
+## Running
+
+Setup once: `python -m venv .venv`, activate, `python -m pip install -r requirements.txt`.
+`trajio` needs `PYTHONPATH=src`.
+
+```powershell
+$env:PYTHONPATH = "$PWD\src"
+
+python -m trajio sources | describe <name> | selftest
+python -m trajio export --source mopsi --root data\downloads\mopsi --dims 2 `
+                        --out data\trajectories\mopsi
+python -m trajio stats  --source mopsi --root data\downloads\mopsi
+
+python src\viz\generate.py spiral2d -n 600 -o data\synthetic\spiral2d.json
+python src\viz\plot.py data\synthetic\spiral2d.json -o data\renders\spiral2d.png
+```
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # + -G "MinGW Makefiles" on Windows
+cmake --build build -j
+./build/tests/ssk_tests [name-filter]
+```
+
+`trajio selftest` runs every dataset parser against fixtures and needs no downloads — it is
+the fast check that ingestion still works.

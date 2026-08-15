@@ -1,0 +1,49 @@
+# updates
+UPDATES.md
+
+# --- local-only working directories ---
+archive/
+
+# --- build output ---
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+compile_commands.json
+*.o
+*.obj
+*.a
+*.lib
+*.exe
+*.dll
+*.pdb
+
+# --- data ---
+# Downloads and everything derived from them: gigabytes, and mostly redistributable
+# only under their own licences. Commit the commands in docs/datasets.md, never the
+# data. The two READMEs are the exception.
+data/downloads/*
+!data/downloads/.gitkeep
+!data/downloads/README.md
+data/trajectories/*
+!data/trajectories/.gitkeep
+data/synthetic/
+data/renders/
+
+# --- python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# --- editors, os ---
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
