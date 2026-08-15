@@ -49,6 +49,30 @@ Document read_trajectory(const json::Value& doc) {
     out.points.push_back(std::move(q));
     ++index;
   }
+
+  const json::Value* unit = doc.find("t_unit");
+  if (unit != nullptr && unit->is_string()) {
+    out.t_unit = unit->str();
+  }
+  const json::Value* times = doc.find("t");
+  if (times != nullptr && !times->is_null()) {
+    if (!times->is_array()) {
+      throw std::runtime_error("trajectory: \"t\" must be an array");
+    }
+    if (times->arr().size() != out.points.size()) {
+      throw std::runtime_error("trajectory: \"t\" has " +
+                               std::to_string(times->arr().size()) + " entries but there are " +
+                               std::to_string(out.points.size()) + " points");
+    }
+    out.t.reserve(times->arr().size());
+    for (const json::Value& v : times->arr()) {
+      if (!v.is_number()) {
+        throw std::runtime_error("trajectory: \"t\" entry " +
+                                 std::to_string(out.t.size()) + " is not a number");
+      }
+      out.t.push_back(v.num());
+    }
+  }
   return out;
 }
 
@@ -75,6 +99,17 @@ json::Value to_json(const Document& doc) {
   out.emplace("dim", json::Value(static_cast<double>(doc.dim)));
   if (!doc.name.empty()) {
     out.emplace("name", json::Value(doc.name));
+  }
+  if (!doc.t_unit.empty()) {
+    out.emplace("t_unit", json::Value(doc.t_unit));
+  }
+  if (!doc.t.empty()) {
+    json::Array times;
+    times.reserve(doc.t.size());
+    for (const double v : doc.t) {
+      times.push_back(json::Value(v));
+    }
+    out.emplace("t", json::Value(std::move(times)));
   }
   out.emplace("points", points_to_json(doc.points));
   return json::Value(std::move(out));

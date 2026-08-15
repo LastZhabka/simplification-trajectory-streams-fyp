@@ -234,6 +234,8 @@ File contents:
 {
   "dim": 2,
   "name": "mopsi/routes/1/1216461503656",
+  "t_unit": "unix_ms",
+  "t": [1216461503656, 1216461508749],
   "points": [
     [29.74249, 62.61478],
     [29.742665, 62.614714]
@@ -244,7 +246,7 @@ File contents:
 Index contents:
 
 ```json
-{"dataset": "mopsi", "count": 6779,
+{"dataset": "mopsi", "count": 6779, "t_unit": "unix_ms",
  "trajectories": [
    {"file": "mopsi-000001.json", "name": "mopsi/routes/1/1216461503656",
     "points": 47, "dim": 2}
@@ -256,17 +258,22 @@ Index contents:
 ```powershell
 python -m trajio export --source geolife --root "data\downloads\geolife\Geolife Trajectories 1.3" --dims 2 --out data\trajectories\geolife
 python -m trajio export --source mopsi   --root data\downloads\mopsi --dims 2 --out data\trajectories\mopsi
-python -m trajio export --source mot     --root data\downloads\mot\dataset\MOT17 --dims 2 --out data\trajectories\mot-mot17
+python -m trajio export --source mot     --root data\downloads\mot\dataset\MOT17 --opt fps=30 --dims 2 --out data\trajectories\mot-mot17
+python -m trajio export --source mot     --root data\downloads\mot\dataset\DanceTrack --opt fps=20 --dims 2 --out data\trajectories\mot-dancetrack
 python -m trajio export --source ngsim   --root data\downloads\ngsim --opt location=us-101 --opt grouping=external --dims 2 --out data\trajectories\ngsim-us-101
 ```
 
-NGSIM is exported per site, because the four sites are separate coordinate frames.
+NGSIM is exported per site, because the four sites are separate coordinate frames. MOT is
+exported per archive, and `--opt fps=` has to be set per archive too: DanceTrack is 20 fps,
+MOT17 and MOT20 are taken as 30. MOT17's sequences are actually mixed (14, 25, 30), so its
+synthesised timestamps are approximate for some of them.
 
 ### Export size
 
 Measured on the CSV export this replaced. The point and file counts are unchanged by the
 move to JSON; the byte sizes are not — one point per line as `[x, y],` runs roughly 1.3 to
-1.4 times the width of `x,y`, so budget about 1.3 GB in total rather than 972 MB.
+1.4 times the width of `x,y`, and the parallel `t` array adds roughly 16 bytes per point on
+top, so budget about 2 GB in total rather than 972 MB.
 
 | Directory | Files | Points | Size (as CSV) |
 |---|---:|---:|---:|

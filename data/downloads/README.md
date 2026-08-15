@@ -25,18 +25,22 @@ python -m trajio selftest                # every parser, no downloads needed
 python -m trajio export --source mopsi --root data\downloads\mopsi --dims 2 `
                         --out data\trajectories\mopsi
 python -m trajio stats  --source mopsi --root data\downloads\mopsi
+
+# MOT has no clock: state the frame rate its timestamps are synthesised from
+python -m trajio export --source mot --root data\downloads\mot\dataset\DanceTrack `
+                        --opt fps=20 --dims 2 --out data\trajectories\mot-dancetrack
 ```
 
 Export writes `<out>/<dataset>-<ord>.json` plus `<out>/index.json`.
 
 ## The datasets
 
-| Dataset | `--source` | dims | x, y | Trajectory = |
-|---|---|---|---|---|
-| GeoLife | `geolife` | 2, 3 | lon, lat (deg); z = altitude in **feet** | one `.plt` file |
-| Mopsi | `mopsi` | 2, 3 | lon, lat (deg); z = altitude in **metres** | one route file |
-| NGSIM | `ngsim` | 2 | `Global_X`, `Global_Y` (State Plane **feet**) | one (site, vehicle, section) |
-| MOT | `mot` | 2 | bounding-box centre (**pixels**) | one (sequence, track id) |
+| Dataset | `--source` | dims | x, y | time | Trajectory = |
+|---|---|---|---|---|---|
+| GeoLife | `geolife` | 2, 3 | lon, lat (deg); z = altitude in **feet** | date+time, read as UTC | one `.plt` file |
+| Mopsi | `mopsi` | 2, 3 | lon, lat (deg); z = altitude in **metres** | epoch ms, verbatim | one route file |
+| NGSIM | `ngsim` | 2 | `Global_X`, `Global_Y` (State Plane **feet**) | ms, verbatim; epoch only on 3 of 4 sites | one (site, vehicle, section) |
+| MOT | `mot` | 2 | bounding-box centre (**pixels**) | **synthesised** from `--opt fps=` | one (sequence, track id) |
 
 `--dims 3` is rejected on 2D-only datasets. Where a dataset supports 3, a trajectory with a
 missing altitude on any point is written 2D instead. GeoLife's `-777` and Mopsi's `-1.0`
@@ -78,7 +82,17 @@ data\downloads\mot\dataset\MOT17 | MOT20 | DanceTrack
 - **NGSIM `Vehicle_ID` is not a trajectory id.** On the arterial sites (lankershim,
   peachtree) it is reused by distinct vehicles at the same instant, so the grouping key
   includes `Section_ID`. Without that, two cars hundreds of metres apart become one track.
-- **MOT `x,y` are computed** (`left + width/2`), the only values not copied verbatim.
+- **NGSIM `Global_Time` is not on one epoch.** us-101, i-80 and lankershim decode to their
+  real 2005 collection dates; peachtree's values are 1000× smaller and decode to January
+  1970, though they still step by 100 per 10 Hz sample. Peachtree is exported as `ms`, not
+  `unix_ms`. Sampling intervals are correct everywhere, so SED is unaffected.
+- **MOT `x,y` are computed** (`left + width/2`), and its timestamps are synthesised from an
+  assumed frame rate — the only values not copied from the files. The flattened archives
+  have no `seqinfo.ini`, and MOT17's sequences genuinely run at 14, 25 and 30 fps, so one
+  `--opt fps=` per export is wrong for some of them. `index.json` records what was used.
+- **GeoLife's timestamps are converted**, not copied: `2008-10-23,02:53:04` read as UTC.
+  The dataset states no zone and the traces are mostly Beijing, so absolute times may be
+  offset; intervals are not.
 - **NGSIM ships as one 1.5 GB CSV** and GeoLife/Mopsi as their own line formats. Those are
   the datasets' formats and are read as they are; the CSV in this repository is all
   *input*, never output.

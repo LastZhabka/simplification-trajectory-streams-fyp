@@ -24,10 +24,12 @@ FYP. The algorithm is being rewritten; what exists now is the tooling around it.
 | `docs/` | `datasets.md`, `trajio.md` | Measured numbers, not quoted ones. |
 | `scripts/` | Entry points, experiment drivers. | Empty so far. |
 
-**One format everywhere:** `{"dim": 2, "name": "...", "points": [[x, y], ...]}`. trajio
-writes it, `algo/io` reads it, `viz` draws it. A *result* document adds `algorithm`,
-`mode`, `params`, `stats`, `input_points`, `frechet`. No CSV output anywhere — the CSV in
-the repo is dataset input only.
+**One format everywhere:** `{"dim": 2, "name": "...", "t_unit": "unix_ms", "t": [...],
+"points": [[x, y], ...]}`. trajio writes it, `algo/io` reads it, `viz` draws it. `t` is
+optional (one per point; `unix_ms` absolute or `ms` from the sequence start) and exists for
+the SED-based baselines. A *result* document adds `algorithm`, `mode`, `params`, `stats`,
+`input_points`, `frechet`. No CSV output anywhere — the CSV in the repo is dataset input
+only.
 
 ## Running
 

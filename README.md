@@ -38,6 +38,8 @@ One JSON document per curve — the only trajectory format in this repository:
 {
   "dim": 2,
   "name": "geolife/000/20081023025304",
+  "t_unit": "unix_ms",
+  "t": [1224730384000, 1224730390000],
   "points": [
     [116.318417, 39.984702],
     [116.31845, 39.984683]
@@ -46,10 +48,14 @@ One JSON document per curve — the only trajectory format in this repository:
 ```
 
 `dim` is 2 or 3 and every point has exactly that many coordinates; it is inferred from the
-first point when the field is absent. `name` is provenance and is optional. A *result*
-document is the same plus `algorithm`, `mode`, `params`, `stats`, `input_points` (the
-original curve, with `points` now the simplified one) and, when checked, `frechet`.
-`viz/plot.py` renders either — the statistics panel fills in from whatever is present.
+first point when the field is absent. `name` is provenance and is optional. `t` is optional
+too — one timestamp per point, in `unix_ms` (absolute epoch) or `ms` (from the start of the
+sequence), as declared by `t_unit`. It is carried because the SED-based baselines in the
+literature need a clock, while Fréchet-bounded and perpendicular-distance simplification do
+not. A *result* document is the same plus `algorithm`, `mode`, `params`, `stats`,
+`input_points` (the original curve, with `points` now the simplified one) and, when checked,
+`frechet`. `viz/plot.py` renders either — the statistics panel fills in from whatever is
+present.
 
 More on the data directories and how to refill them: [`data/README.md`](data/README.md).
 

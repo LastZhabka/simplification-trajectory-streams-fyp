@@ -8,6 +8,13 @@ sequence, no `gt/` directory:
 One trajectory per `(sequence, track id)`. x, y are the **box centre** in pixels --
 `left + width/2`, `top + height/2` -- so unlike every other source these two numbers are
 computed, not copied from the file. No z.
+
+There is no clock here, only a frame number, so the timestamp is **synthesised**:
+`(frame - 1) * 1000 / fps`, milliseconds from the first frame of the sequence. `fps` is an
+option rather than a constant because it is a guess -- the flattened archives have no
+`seqinfo.ini`. DanceTrack is 20 fps; MOT17 is genuinely mixed (14, 25 and 30 across its
+sequences), so one value per export run is wrong for some of them and any SED computed from
+those is distorted accordingly. `index.json` records the value that was used.
 """
 
 from __future__ import annotations
@@ -24,14 +31,19 @@ class MOTTracks(TrajectorySource):
     summary = "video object tracks (MOT17/MOT20/DanceTrack); box centre in pixels"
     dims = (2,)
     axes = "x, y = bounding-box centre (pixels)"
+    time_unit = "ms"
 
     OPTIONS = {
         "pattern": Option(str, "**/*.txt", "glob for annotation files; **/gt/gt.txt for MOTChallenge"),
+        "fps": Option(float, 30.0, "frame rate assumed when synthesising timestamps; 20 for DanceTrack"),
     }
 
-    def __init__(self, root: str, *, pattern: str = "**/*.txt") -> None:
+    def __init__(self, root: str, *, pattern: str = "**/*.txt", fps: float = 30.0) -> None:
         super().__init__(root)
         self.pattern = pattern
+        if fps <= 0:
+            raise ValueError(f"fps must be positive, got {fps}")
+        self.fps = fps
 
     def tracks(self) -> Iterator[Track]:
         root = Path(self.root)
@@ -58,4 +70,8 @@ class MOTTracks(TrajectorySource):
                     per_track.setdefault(parts[1], []).append((frame, point))
             for track_id, rows in per_track.items():
                 rows.sort(key=lambda r: r[0])
-                yield Track(id=f"mot/{seq}/{track_id}", points=[p for _f, p in rows])
+                yield Track(
+                    id=f"mot/{seq}/{track_id}",
+                    points=[p for _f, p in rows],
+                    times=[str(round((f - 1) * 1000.0 / self.fps)) for f, _p in rows],
+                )

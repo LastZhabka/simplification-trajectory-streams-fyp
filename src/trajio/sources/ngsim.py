@@ -6,6 +6,15 @@ the arterial sites it is reused by distinct vehicles at the same instant, which 
 cars hundreds of metres apart into one zigzagging track.
 
 x = Global_X, y = Global_Y (State Plane NAD83 feet, as stored). No z.
+
+`Global_Time` is milliseconds and is copied verbatim like the coordinates. It is also what
+the rows are sorted by.
+
+Its **origin is not the same at every site**. On us-101, i-80 and lankershim the values are
+13 digits and decode to the real collection dates (2005). On peachtree they are 10 digits
+and decode to January 1970, while still stepping by 100 per 10 Hz sample -- so the unit is
+milliseconds there too, but the epoch is not Unix. Peachtree is therefore labelled `ms`
+rather than `unix_ms`; intervals, which is all SED uses, are unaffected either way.
 """
 
 from __future__ import annotations
@@ -24,6 +33,10 @@ class NGSIM(TrajectorySource):
     summary = "10 Hz vehicle tracks at 4 US road sites; 11.85 M rows in one 1.5 GB CSV"
     dims = (2,)
     axes = "x = Global_X, y = Global_Y (State Plane feet)"
+    time_unit = "ms"
+
+    #: sites whose Global_Time really is a Unix epoch; peachtree's is not
+    _UNIX_SITES = {"us-101", "i-80", "lankershim"}
 
     OPTIONS = {
         "pattern": Option(str, "*.csv", "glob when root is a directory"),
@@ -46,6 +59,9 @@ class NGSIM(TrajectorySource):
         self.location = location.strip().lower()
         self.grouping = grouping
         self.chunk_rows = chunk_rows
+        # An export mixing sites mixes epochs, so only a single Unix site may claim one.
+        if self.location in self._UNIX_SITES:
+            self.time_unit = "unix_ms"
 
     def tracks(self) -> Iterator[Track]:
         paths = iter_csv_files(Path(self.root), self.pattern)
@@ -74,7 +90,11 @@ class NGSIM(TrajectorySource):
         )
         for key, group in groups:
             group.sort(key=lambda r: _int(r[1]))
-            yield Track(id=f"ngsim/{key}", points=[(r[2], r[3], None) for r in group])
+            yield Track(
+                id=f"ngsim/{key}",
+                points=[(r[2], r[3], None) for r in group],
+                times=[r[1].strip() for r in group],
+            )
 
 
 def _cell(head: dict[str, int], row: list[str], name: str) -> str | None:

@@ -32,16 +32,24 @@ Point = tuple[str, str, str | None]
 
 @dataclass(slots=True)
 class Track:
-    """One trajectory: an id for provenance, and its points in file order."""
+    """One trajectory: an id for provenance, and its points in file order.
+
+    `times` is empty when the source has no clock, and otherwise carries one value per
+    point, as source text for the same reason the coordinates are.
+    """
 
     id: str
     points: list[Point] = field(default_factory=list)
+    times: list[str] = field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.points)
 
     def has_z(self) -> bool:
         return bool(self.points) and all(p[2] is not None for p in self.points)
+
+    def has_time(self) -> bool:
+        return len(self.times) == len(self.points) and bool(self.points)
 
 
 def fmt(value: float) -> str:
@@ -69,6 +77,8 @@ class TrajectorySource(ABC):
     dims: tuple[int, ...] = (2,)
     #: what x and y are, for the docs
     axes: str = "x, y"
+    #: what the emitted timestamps mean: "unix_ms", "ms" (from the start), or "" for none
+    time_unit: str = ""
     #: constructor options beyond `root`
     OPTIONS: dict[str, Option] = {}
 

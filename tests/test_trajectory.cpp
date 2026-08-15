@@ -86,4 +86,44 @@ TEST("io/trajectory round-trips through to_json") {
   CHECK_CLOSE(out.points[1][1], -2.25, 1e-12);
 }
 
+TEST("io/trajectory reads t and t_unit") {
+  const auto doc = parse(R"({"dim": 2, "t_unit": "unix_ms",)"
+                         R"( "t": [1216461503656, 1216461508749],)"
+                         R"( "points": [[29.74249, 62.61478], [29.742665, 62.614714]]})");
+  CHECK(doc.t_unit == "unix_ms");
+  CHECK(doc.t.size() == 2);
+  // Epoch milliseconds are below 2^53, so a double holds them exactly.
+  CHECK(static_cast<long long>(doc.t[0]) == 1216461503656LL);
+  CHECK(static_cast<long long>(doc.t[1]) == 1216461508749LL);
+}
+
+TEST("io/trajectory t is optional") {
+  const auto doc = parse(R"({"dim": 2, "points": [[1, 2], [3, 4]]})");
+  CHECK(doc.t.empty());
+  CHECK(doc.t_unit.empty());
+}
+
+TEST("io/trajectory rejects a t of the wrong length") {
+  CHECK_MSG(raises(R"({"dim": 2, "t": [1], "points": [[1, 2], [3, 4]]})"),
+            "one timestamp for two points must raise");
+  CHECK_MSG(raises(R"({"dim": 2, "t": [1, 2, 3], "points": [[1, 2], [3, 4]]})"),
+            "three timestamps for two points must raise");
+}
+
+TEST("io/trajectory rejects a non-numeric or non-array t") {
+  CHECK_MSG(raises(R"({"dim": 2, "t": ["1216461503656"], "points": [[1, 2]]})"),
+            "a string timestamp must raise");
+  CHECK_MSG(raises(R"({"dim": 2, "t": 1216461503656, "points": [[1, 2]]})"),
+            "a scalar \"t\" must raise");
+}
+
+TEST("io/trajectory round-trips t and t_unit through to_json") {
+  const auto in = parse(R"({"dim": 2, "t_unit": "ms", "t": [0, 33, 67],)"
+                        R"( "points": [[1, 2], [3, 4], [5, 6]]})");
+  const auto out = ssk::io::read_trajectory(ssk::json::parse(ssk::io::to_json(in).dump(2)));
+  CHECK(out.t_unit == "ms");
+  CHECK(out.t.size() == 3);
+  CHECK_CLOSE(out.t[2], 67.0, 1e-12);
+}
+
 }  // namespace

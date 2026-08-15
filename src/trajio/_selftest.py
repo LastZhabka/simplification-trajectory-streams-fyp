@@ -114,6 +114,12 @@ def check_geolife(root: Path, out: Path) -> None:
     raw = (out / "geolife-000001.json").read_text(encoding="utf-8")
     check("[116.318417, 39.984702]" in raw, "geolife: coordinates not written verbatim")
 
+    # 2008-04-12 06:31:27 UTC, converted -- the one field that cannot be copied
+    check(first["t_unit"] == "unix_ms", f"geolife: t_unit {first.get('t_unit')!r}")
+    check(first["t"] == [1207981887000, 1207981888000, 1207981889000],
+          f"geolife: timestamps {first['t']}")
+    check(len(second["t"]) == len(second["points"]), "geolife: t/points length mismatch")
+
 
 def check_mopsi(root: Path, out: Path) -> None:
     tracks = list(open_source("mopsi", str(root)))
@@ -124,6 +130,14 @@ def check_mopsi(root: Path, out: Path) -> None:
     check(not t.has_z(), "mopsi: track with a -1.0 point must not count as 3D")
     idx = export(open_source("mopsi", str(root)), out, dims=3)
     check([r[3] for r in idx] == [2, 3], f"mopsi: dims per file wrong: {[r[3] for r in idx]}")
+
+    doc = _read(out / "mopsi-000001.json")
+    check(doc["t_unit"] == "unix_ms", f"mopsi: t_unit {doc.get('t_unit')!r}")
+    check(doc["t"] == [1216040000000, 1216040005000, 1216040010000],
+          f"mopsi: timestamps {doc['t']}")
+    raw = (out / "mopsi-000001.json").read_text(encoding="utf-8")
+    check("1216040000000" in raw and '"1216040000000"' not in raw,
+          "mopsi: epoch-ms timestamp not written verbatim as a number")
 
 
 def check_ngsim(root: Path, out: Path) -> None:
@@ -141,6 +155,16 @@ def check_ngsim(root: Path, out: Path) -> None:
     doc = _read(out / "ngsim-000001.json")
     check(doc["dim"] == 2 and doc["points"][0] == [6451137.641, 1873344.962],
           f"ngsim: json {doc['dim']}, {doc['points'][:1]}")
+    check(doc["t_unit"] == "unix_ms", f"ngsim: t_unit {doc.get('t_unit')!r}")
+    check(doc["t"] == [1113433135100, 1113433135200], f"ngsim: timestamps {doc['t']}")
+    # peachtree's Global_Time is milliseconds on a non-Unix origin, so it must not claim one
+    check(open_source("ngsim", str(root), location="peachtree").time_unit == "ms",
+          "ngsim: peachtree must not be labelled unix_ms")
+    check(open_source("ngsim", str(root)).time_unit == "ms",
+          "ngsim: an all-sites export mixes epochs and must not claim unix_ms")
+    raw = (out / "ngsim-000001.json").read_text(encoding="utf-8")
+    check("1113433135100" in raw and '"1113433135100"' not in raw,
+          "ngsim: Global_Time not written verbatim as a number")
 
     try:
         export(open_source("ngsim", str(root)), out, dims=3)
@@ -160,10 +184,22 @@ def check_mot(root: Path, out: Path) -> None:
     export(open_source("mot", str(root)), out, dims=2)
     check((out / "mot-000001.json").exists(), "mot: no output written")
 
+    # no clock in the data: t is synthesised from the assumed frame rate, and says so
+    doc = _read(out / "mot-000001.json")
+    check(doc["t_unit"] == "ms", f"mot: t_unit {doc.get('t_unit')!r}")
+    check(doc["t"] == [0, 33], f"mot: frames 1,2 at 30 fps should be 0,33; got {doc['t']}")
+
+    slow = out / "fps20"
+    export(open_source("mot", str(root), fps=20), slow, dims=2)
+    check(_read(slow / "mot-000001.json")["t"] == [0, 50],
+          "mot: fps option not honoured")
+    check(_read(slow / "index.json").get("fps") == 20,
+          "mot: index.json must record the frame rate that was assumed")
+
 
 def check_index(out: Path) -> None:
     idx = _read(out / "index.json")
-    check(set(idx) == {"dataset", "count", "trajectories"}, f"index: keys {sorted(idx)}")
+    check({"dataset", "count", "trajectories"} <= set(idx), f"index: keys {sorted(idx)}")
     check(idx["count"] == len(idx["trajectories"]) > 0, "index: no entries")
     check(set(idx["trajectories"][0]) == {"file", "name", "points", "dim"},
           f"index: entry keys {sorted(idx['trajectories'][0])}")
