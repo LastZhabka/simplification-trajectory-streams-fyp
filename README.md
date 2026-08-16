@@ -176,8 +176,11 @@ scales, and what was changed from each upstream.
 ### `src/pipelines/` — experiments
 
 ```sh
-./build/src/pipelines/ssk_simplify --in data/trajectories/mopsi \
-                                   --out data/simplified-trajectories
+./build/src/pipelines/simplify-sweep/ssk_simplify \
+    --in data/trajectories/mopsi --out data/simplified-trajectories
+
+./build/src/pipelines/frechet-distance/ssk_frechet \
+    --in data/trajectories/mopsi --out data/frechet-distances
 ```
 
 Simplifies every trajectory in a dataset directory with all three baselines, at a fixed
@@ -192,6 +195,11 @@ it — `count`, `buffer_size`, or the threshold DOTS' search resolved to — `st
 `source` naming the input it came from. `--rates` changes the deepest rate, `--limit` stops
 after N trajectories, and `--shard I --shards N` splits one dataset across processes — worth
 it on GeoLife, where a handful of 60k-point tracks dominate the run.
+
+`ssk_frechet` then measures how far each simplification is from the trajectory it came from,
+writing `data/frechet-distances/<algorithm>/<dataset>/m<rate>/<name>.json` — the same tree,
+one document per measurement, carrying the distance alongside the `params` and `stats` that
+produced it, so a results table needs only that document.
 
 Budget: about 4.3× the input on disk, and roughly 14 documents per trajectory. How to run a
 full corpus sweep, what it costs and how sharding works is
