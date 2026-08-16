@@ -14,8 +14,13 @@ experiment is *for* is [comparison.md](comparison.md); this is how to run it and
 ## The sweep
 
 ```sh
-./build/src/pipelines/ssk_simplify --in data/trajectories/mopsi \
-                                   --out data/simplified-trajectories
+./build/src/pipelines/simplify-sweep/ssk_simplify \
+    --in data/trajectories/mopsi --out data/simplified-trajectories
+```
+
+```powershell
+.\build\src\pipelines\simplify-sweep\ssk_simplify.exe `
+    --in data\trajectories\mopsi --out data\simplified-trajectories
 ```
 
 | Flag | Default | What |
@@ -130,8 +135,15 @@ consumed over 90 CPU-minutes without finishing, four separate times.
 To reproduce the state on disk:
 
 ```sh
-ssk_simplify --in <dir containing only geolife-013552.json named geolife> \
-             --out data/simplified-trajectories --no-dots
+./build/src/pipelines/simplify-sweep/ssk_simplify \
+    --in <dir containing only geolife-013552.json, named geolife> \
+    --out data/simplified-trajectories --no-dots
+```
+
+```powershell
+.\build\src\pipelines\simplify-sweep\ssk_simplify.exe `
+    --in <dir containing only geolife-013552.json, named geolife> `
+    --out data\simplified-trajectories --no-dots
 ```
 
 **What is understood, and what is not.** The budget search had a real defect, since fixed: not
@@ -158,6 +170,11 @@ and elapsed time — rather than trusting the arithmetic above.
 ```sh
 ./build/src/pipelines/frechet-distance/ssk_frechet --in data/trajectories/mopsi \
     --simplified data/simplified-trajectories --out data/frechet-distances
+```
+
+```powershell
+.\build\src\pipelines\frechet-distance\ssk_frechet.exe --in data\trajectories\mopsi `
+    --simplified data\simplified-trajectories --out data\frechet-distances
 ```
 
 Writes `data/frechet-distances/<algorithm>/<dataset>/m<rate>/<name>.json`, **mirroring the
@@ -211,6 +228,11 @@ Result documents are trajectory documents, so they can be read back with
 ```sh
 python src/viz/plot.py \
   data/simplified-trajectories/dots/mopsi/m3/mopsi-000003.json -o data/renders/check.png
+```
+
+```powershell
+python src\viz\plot.py `
+  data\simplified-trajectories\dots\mopsi\m3\mopsi-000003.json -o data\renders\check.png
 ```
 
 Beyond that, a result is verifiable against its input, and `source` names it: the points must

@@ -34,7 +34,14 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.IO.Compression.ZipFile]::ExtractToDirectory("data\downloads\geolife\geolife.zip", "data\downloads\geolife")
 ```
 
-Use `ZipFile` rather than `Expand-Archive`, which takes minutes on 18 670 small files.
+```sh
+curl -L -C - -o data/downloads/geolife/geolife.zip "https://download.microsoft.com/download/F/4/8/F4894AA5-FDBC-481E-9285-D5F8C4C4F039/Geolife%20Trajectories%201.3.zip"
+unzip -q data/downloads/geolife/geolife.zip -d data/downloads/geolife
+```
+
+On Windows use `ZipFile` rather than `Expand-Archive`, which takes minutes on 18 670 small
+files. `curl.exe` is spelled out because bare `curl` is a PowerShell alias for
+`Invoke-WebRequest`, which does not take these flags.
 
 ### Layout and format
 
@@ -74,6 +81,10 @@ method for GPS route analysis for retrieval*, ACM TSAS 3(3), 2017.
 curl.exe -L -C - -o data\downloads\mopsi\MopsiRoutes2014.zip "http://cs.uef.fi/mopsi/routes/dataset/MopsiRoutes2014.zip"
 ```
 
+```sh
+curl -L -C - -o data/downloads/mopsi/MopsiRoutes2014.zip "http://cs.uef.fi/mopsi/routes/dataset/MopsiRoutes2014.zip"
+```
+
 The archive is served from the dataset page's own directory (`/mopsi/routes/dataset/`), not
 from the parent path.
 
@@ -109,6 +120,10 @@ and 2006. US Government public domain.
 
 ```powershell
 curl.exe -L --retry 3 -o data\downloads\ngsim\ngsim.csv "https://data.transportation.gov/api/views/8ect-6jqj/rows.csv?accessType=DOWNLOAD"
+```
+
+```sh
+curl -L --retry 3 -o data/downloads/ngsim/ngsim.csv "https://data.transportation.gov/api/views/8ect-6jqj/rows.csv?accessType=DOWNLOAD"
 ```
 
 The Socrata endpoint generates the export on request, sends no `Content-Length`, and held
@@ -175,6 +190,8 @@ python -m gdown 1AjiqAP2AGR_Qk8M0t2y388LvH7EDpZok -O MOT17.zip       # 3.97 MB
 python -m gdown 1xkpnUaM54dzwBfakVUQMlG5qaQdyVQZc -O MOT20.zip       # 11.5 MB
 python -m gdown 1mOb1g-ptPX9h9Djlj-xVvn7MdEerqWLX -O DanceTrack.zip  # 4.93 MB
 ```
+
+Identical on Linux and macOS — `git` and `gdown` take the same arguments everywhere.
 
 ### Layout and format
 
@@ -261,6 +278,14 @@ python -m trajio export --source mopsi   --root data\downloads\mopsi --dims 2 --
 python -m trajio export --source mot     --root data\downloads\mot\dataset\MOT17 --opt fps=30 --dims 2 --out data\trajectories\mot-mot17
 python -m trajio export --source mot     --root data\downloads\mot\dataset\DanceTrack --opt fps=20 --dims 2 --out data\trajectories\mot-dancetrack
 python -m trajio export --source ngsim   --root data\downloads\ngsim --opt location=us-101 --opt grouping=external --dims 2 --out data\trajectories\ngsim-us-101
+```
+
+```sh
+python -m trajio export --source geolife --root "data/downloads/geolife/Geolife Trajectories 1.3" --dims 2 --out data/trajectories/geolife
+python -m trajio export --source mopsi   --root data/downloads/mopsi --dims 2 --out data/trajectories/mopsi
+python -m trajio export --source mot     --root data/downloads/mot/dataset/MOT17 --opt fps=30 --dims 2 --out data/trajectories/mot-mot17
+python -m trajio export --source mot     --root data/downloads/mot/dataset/DanceTrack --opt fps=20 --dims 2 --out data/trajectories/mot-dancetrack
+python -m trajio export --source ngsim   --root data/downloads/ngsim --opt location=us-101 --opt grouping=external --dims 2 --out data/trajectories/ngsim-us-101
 ```
 
 NGSIM is exported per site, because the four sites are separate coordinate frames. MOT is

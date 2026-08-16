@@ -111,14 +111,24 @@ cmake --build build -j
 ./build/tests/ssk_tests
 ```
 
-On Windows with MinGW add `-G "MinGW Makefiles"`, and the test binary is
-`.\build\tests\ssk_tests.exe`.
+```powershell
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles"
+cmake --build build -j
+.\build\tests\ssk_tests.exe
+```
+
+The generator is the only difference: MinGW needs naming, the default works elsewhere.
 
 ### 3. End to end
 
 ```powershell
 python src\viz\generate.py spiral2d -n 600 -o data\synthetic\spiral2d.json
 python src\viz\plot.py data\synthetic\spiral2d.json -o data\renders\spiral2d.png
+```
+
+```sh
+python src/viz/generate.py spiral2d -n 600 -o data/synthetic/spiral2d.json
+python src/viz/plot.py data/synthetic/spiral2d.json -o data/renders/spiral2d.png
 ```
 
 That writes a PNG under `data/renders/`. If you have the datasets downloaded, the same
@@ -137,6 +147,14 @@ $env:PYTHONPATH = "$PWD\src"
 python -m trajio sources
 python -m trajio export --source mopsi --root data\downloads\mopsi --dims 2 `
                         --out data\trajectories\mopsi
+python -m trajio selftest
+```
+
+```sh
+export PYTHONPATH=$PWD/src
+python -m trajio sources
+python -m trajio export --source mopsi --root data/downloads/mopsi --dims 2 \
+                        --out data/trajectories/mopsi
 python -m trajio selftest
 ```
 
@@ -183,6 +201,14 @@ scales, and what was changed from each upstream.
     --in data/trajectories/mopsi --out data/frechet-distances
 ```
 
+```powershell
+.\build\src\pipelines\simplify-sweep\ssk_simplify.exe `
+    --in data\trajectories\mopsi --out data\simplified-trajectories
+
+.\build\src\pipelines\frechet-distance\ssk_frechet.exe `
+    --in data\trajectories\mopsi --out data\frechet-distances
+```
+
 Simplifies every trajectory in a dataset directory with all three baselines, at a fixed
 compression rate of 1/2^m for m = 1…6, and writes
 `data/simplified-trajectories/<algorithm>/<dataset>/m<rate>/<name>.json` — one document per
@@ -214,6 +240,11 @@ can and cannot claim, is [`docs/comparison.md`](docs/comparison.md).
 ```sh
 python src/viz/generate.py spiral2d -n 600 -o data/synthetic/spiral2d.json
 python src/viz/plot.py data/synthetic/spiral2d.json -o data/renders/spiral2d.png
+```
+
+```powershell
+python src\viz\generate.py spiral2d -n 600 -o data\synthetic\spiral2d.json
+python src\viz\plot.py data\synthetic\spiral2d.json -o data\renders\spiral2d.png
 ```
 
 `plot.py` renders with matplotlib on the `Agg` backend, so it writes files without needing

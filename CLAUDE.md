@@ -48,13 +48,37 @@ python -m trajio stats  --source mopsi --root data\downloads\mopsi
 
 python src\viz\generate.py spiral2d -n 600 -o data\synthetic\spiral2d.json
 python src\viz\plot.py data\synthetic\spiral2d.json -o data\renders\spiral2d.png
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles"
+cmake --build build -j
+.\build\tests\ssk_tests.exe [name-filter]
+.\build\src\pipelines\simplify-sweep\ssk_simplify.exe --in data\trajectories\mopsi --out data\simplified-trajectories
+.\build\src\pipelines\frechet-distance\ssk_frechet.exe --in data\trajectories\mopsi --out data\frechet-distances
 ```
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # + -G "MinGW Makefiles" on Windows
+export PYTHONPATH=$PWD/src
+
+python -m trajio sources | describe <name> | selftest
+python -m trajio export --source mopsi --root data/downloads/mopsi --dims 2 \
+                        --out data/trajectories/mopsi
+python -m trajio stats  --source mopsi --root data/downloads/mopsi
+
+python src/viz/generate.py spiral2d -n 600 -o data/synthetic/spiral2d.json
+python src/viz/plot.py data/synthetic/spiral2d.json -o data/renders/spiral2d.png
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ./build/tests/ssk_tests [name-filter]
+./build/src/pipelines/simplify-sweep/ssk_simplify --in data/trajectories/mopsi --out data/simplified-trajectories
+./build/src/pipelines/frechet-distance/ssk_frechet --in data/trajectories/mopsi --out data/frechet-distances
 ```
+
+**Nothing in the project is platform-specific — only the shell is.** No `_WIN32`, no `.exe` in
+CMake, every Python file opened with an explicit `encoding="utf-8"`, `.gitattributes` pinning
+`eol=lf`, and `source`/`simplified` fields in result documents built with `/` rather than
+`std::filesystem::path` so the JSON moves between machines. Keep it that way: when adding a
+command to a doc, add both forms. The translation table is at the end of `docs/running.md`.
 
 `trajio selftest` runs every dataset parser against fixtures and needs no downloads — it is
 the fast check that ingestion still works.
