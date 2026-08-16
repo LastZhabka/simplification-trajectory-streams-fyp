@@ -304,7 +304,8 @@ and run it per dataset in parallel as with the sweep.
 
 ## 6. Measure the error
 
-The eight smaller datasets first — about 25 core-minutes between them:
+The eight smaller datasets first — about 90 core-minutes of compute between them, over half of
+it Mopsi, so run them concurrently rather than in the loop below if you have the cores:
 
 ```powershell
 foreach ($ds in Get-ChildItem data\trajectories -Directory -Exclude geolife) {
