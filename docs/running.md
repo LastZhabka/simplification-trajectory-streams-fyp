@@ -47,7 +47,7 @@ cmake --build build -j
 The generator is the only build difference: MinGW needs naming, the default works elsewhere.
 Use `-G Ninja` on either platform if you have it.
 
-56 tests, a few seconds. Run them before anything long — they cover the simplifiers against
+63 tests, a few seconds. Run them before anything long — they cover the simplifiers against
 their reference implementations, the Fréchet distance against three, and both pipelines'
 document formats.
 
@@ -343,6 +343,10 @@ reads every result document and its input, and that I/O dominates, exactly as it
 corpus audit. Cost is `n × m` cells per pair, so it is quadratic in trajectory length at a
 fixed rate and **GeoLife alone is 77% of the total** — sharding by dataset achieves nothing on
 its own, the split has to be within GeoLife. `--shard` works here exactly as above.
+
+A whole-corpus pass runs for hours, so if one dies, add **`--skip-existing`** when restarting:
+a measurement is a pure function of the two documents it reads, so one already written need
+not be computed again.
 
 Unlike the sweep, this cost is known in advance: cells are `n × m` exactly at a measured
 34.45 ns each, and the worst single trajectory in the corpus is 15 minutes on one core. Nothing

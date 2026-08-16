@@ -107,10 +107,14 @@ m = 1…6:
 | `mot-dancetrack` | 692 | 574 078 | 12 335 | 8.6 min |
 | **total** | **47 916** | **47 102 992** | **786 642** | |
 
-Those timings are single-process per dataset, several datasets at once, so they include disk
-contention. **DOTS is essentially the whole cost** — measured separately, a 6-rate sweep over
-778 766 points takes DPn 0.4 s, SQUISH 2.9 s, and DOTS 76 s once its threshold search is
-included.
+**Those wall times are heavily inflated by contention** and are not the cost of one dataset.
+They were measured with five or six datasets running at once, all competing for the same disk.
+Run alone, `mot-dancetrack` takes **59 s against the 8.6 min in the table — 8.7× faster**.
+These jobs are I/O-bound, so past a few workers an extra one buys contention rather than
+throughput.
+
+**DOTS is essentially the whole compute** — measured separately, a 6-rate sweep over 778 766
+points takes DPn 0.4 s, SQUISH 2.9 s, and DOTS 76 s once its threshold search is included.
 
 **GeoLife needs sharding, the others do not.** Its median trajectory is 506 points but five
 exceed 56 000, and at DOTS' scaling those five dominate the dataset: run as one process it
@@ -188,6 +192,7 @@ and elapsed time — rather than trusting the arithmetic above.
 | `--rates N` | 6 | deepest compression rate to look for |
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process only every Nth trajectory, starting at I |
+| `--skip-existing` | off | do not recompute a measurement already on disk, making an interrupted run resumable |
 
 A simplification that is absent is skipped rather than treated as an error, so a corpus with
 gaps — DOTS is missing 1 040 operating points, see *Reading the numbers* — measures cleanly

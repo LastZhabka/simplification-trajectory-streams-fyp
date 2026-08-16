@@ -9,7 +9,9 @@
 //
 // Cost is quadratic in trajectory length at a fixed rate -- the free-space diagram is n by m
 // cells -- so the long GeoLife tracks dominate, and `--shard I --shards N` is here for the
-// same reason it is in the sweep.
+// same reason it is in the sweep. A whole-corpus pass runs for hours, so `--skip-existing`
+// makes an interrupted one resumable: a measurement is a pure function of the two documents
+// it reads, so one already written is one that need not be computed again.
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -33,12 +35,13 @@ struct Options {
   int limit = 0;
   int shard = 0;
   int shards = 1;
+  bool skip_existing = false;
 };
 
 void usage() {
   std::fprintf(stderr,
                "usage: ssk_frechet --in DIR [--simplified DIR] [--out DIR] [--tol REL] "
-               "[--rates N] [--limit N] [--shard I --shards N]\n");
+               "[--rates N] [--limit N] [--shard I --shards N] [--skip-existing]\n");
   std::exit(2);
 }
 
@@ -63,6 +66,8 @@ Options parse_args(int argc, char** argv) {
       opt.shard = std::atoi(argv[++i]);
     } else if (arg == "--shards" && has_value) {
       opt.shards = std::atoi(argv[++i]);
+    } else if (arg == "--skip-existing") {
+      opt.skip_existing = true;
     } else {
       usage();
     }
@@ -113,7 +118,7 @@ int main(int argc, char** argv) {
   const std::vector<std::string> algorithms{"douglas-peucker-n", "squish", "dots"};
   const frechet::Frechet<2> computer;
   const auto started = std::chrono::steady_clock::now();
-  std::size_t written = 0, cells = 0;
+  std::size_t written = 0, cells = 0, skipped = 0;
   double worst = 0.0;
 
   for (const fs::path& file : files) {
@@ -128,6 +133,13 @@ int main(int argc, char** argv) {
         if (!fs::exists(from)) {
           continue;
         }
+        const fs::path to = fs::path(opt.out) / algorithm / dataset / rate / name;
+        // Resuming an interrupted run: the measurement is a pure function of the two
+        // documents, so one already on disk is one that need not be computed again.
+        if (opt.skip_existing && fs::exists(to)) {
+          ++skipped;
+          continue;
+        }
         const json::Value doc = json::parse_file(from.string());
         const frechet::Curve<2> simplified = curve_of(io::read_trajectory(doc));
 
@@ -136,7 +148,6 @@ int main(int argc, char** argv) {
         cells += curve.size() * simplified.size();
         worst = std::max(worst, measured.distance);
 
-        const fs::path to = fs::path(opt.out) / algorithm / dataset / rate / name;
         fs::create_directories(to.parent_path());
         std::ofstream stream(to);
         pipelines::to_json(input, doc, dataset, dataset + "/" + name,
@@ -153,6 +164,9 @@ int main(int argc, char** argv) {
   std::printf("%s: %zu trajectories -> %zu measurements in %.1f s (%.2f G cells, worst %.6g)\n",
               dataset.c_str(), files.size(), written, seconds,
               static_cast<double>(cells) / 1e9, worst);
+  if (skipped > 0) {
+    std::printf("  %zu already measured, skipped\n", skipped);
+  }
   std::printf("  out: %s/<algorithm>/%s/\n", opt.out.c_str(), dataset.c_str());
   return 0;
 }

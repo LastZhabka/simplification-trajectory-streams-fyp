@@ -158,7 +158,14 @@ The 6.6 core-hours are compute. The job also reads **every one of the ~786 000 r
 and their inputs**, which is the access pattern that made the corpus audit take about 2.5 hours
 of wall clock across nine parallel processes while running at 5% CPU.
 
-So a full corpus pass should be planned as **roughly three hours of wall clock**, with the ~50
-minutes of eight-core compute hidden inside it — not the 50 minutes alone. That figure is
-extrapolated from the audit rather than measured for this pipeline, so treat it as an
-expectation to check on the first dataset, not a promise.
+Measured on `mot-dancetrack`, single process, nothing else running: **1.73 Gcells predicted
+60 s of compute and the run took 160 s** — 2.7×, the difference being 101 s spread over 13 027
+file reads, about **7.7 ms per document**. Cells predicted the compute almost exactly; the
+files were the rest.
+
+That 7.7 ms is a *warm* figure — those documents had just been written and were in the page
+cache — so it is a lower bound for a corpus pass reading cold files. The corpus audit, which
+does the same reads on a cold tree, ran at 5% CPU for about 2.5 hours across nine processes.
+
+So plan a full pass as **hours, not the 50 minutes of compute**, and take the first dataset's
+ratio as the calibration rather than trusting either number here.
