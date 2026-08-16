@@ -179,6 +179,20 @@ and elapsed time — rather than trusting the arithmetic above.
     --simplified data\simplified-trajectories --out data\frechet-distances
 ```
 
+| Flag | Default | What |
+|---|---|---|
+| `--in DIR` | required | a dataset directory of trajectory documents; `index.json` is skipped |
+| `--simplified DIR` | `data/simplified-trajectories` | the tree to measure |
+| `--out DIR` | `data/frechet-distances` | root of the measurement tree |
+| `--tol REL` | `1e-9` | bisection tolerance, **relative** to the input's bounding-box diagonal |
+| `--rates N` | 6 | deepest compression rate to look for |
+| `--limit N` | all | stop after N trajectories |
+| `--shard I --shards N` | 0 / 1 | process only every Nth trajectory, starting at I |
+
+A simplification that is absent is skipped rather than treated as an error, so a corpus with
+gaps — DOTS is missing 1 040 operating points, see *Reading the numbers* — measures cleanly
+without special handling.
+
 Writes `data/frechet-distances/<algorithm>/<dataset>/m<rate>/<name>.json`, **mirroring the
 simplified tree exactly**, one document per simplification:
 

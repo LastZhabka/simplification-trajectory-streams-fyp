@@ -247,9 +247,16 @@ for ds in data/trajectories/*/; do
 done
 ```
 
-**Budget about 6.6 core-hours**, under an hour on eight. Cost is `n × m` cells per pair, so it
-is quadratic in trajectory length at a fixed rate and GeoLife dominates again — `--shard`
-works here exactly as above.
+**Budget about 6.6 core-hours of compute, but roughly three hours of wall clock**: the job
+reads every result document and its input, and that I/O dominates, exactly as it did for the
+corpus audit. Cost is `n × m` cells per pair, so it is quadratic in trajectory length at a
+fixed rate and **GeoLife alone is 77% of the total** — sharding by dataset achieves nothing on
+its own, the split has to be within GeoLife. `--shard` works here exactly as above.
+
+Unlike the sweep, this cost is known in advance: cells are `n × m` exactly at a measured
+34.45 ns each, and the worst single trajectory in the corpus is 15 minutes on one core. Nothing
+can stall — there is no search and no data-dependent branching. The per-dataset breakdown is in
+[frechet-distance.md](frechet-distance.md).
 
 The result is one document per simplification at
 `data/frechet-distances/<algorithm>/<dataset>/m<rate>/<name>.json`, carrying the distance

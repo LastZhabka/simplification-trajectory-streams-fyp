@@ -4,6 +4,11 @@ The measure everything in [comparison.md](comparison.md) is scored against. `src
 is a port of the ACM SIGSPATIAL GIS Cup 2017 winning implementation, verified against two
 independent references.
 
+This document is the **library**: what was ported, how it was verified, and what it costs. The
+driver that applies it to a corpus — `ssk_frechet`, its flags, its output layout and how to
+shard it — is [pipeline.md](pipeline.md); the end-to-end walkthrough is
+[running.md](running.md).
+
 ## The interface
 
 `frechet/frechet.hpp`, header-only because it is templated on dimension the way the
@@ -108,9 +113,52 @@ Measured on real trajectory–simplification pairs from the corpus, MinGW g++ 15
 
 The value costs **9.2×** the decision, not the 30–50 a naive bisection count suggests, because
 the filters reject most radii long before a full traversal. A free-space diagram is `n × m`
-cells, so scoring the whole corpus — 786 636 results, 0.69 trillion cells — is about **6.6
-core-hours, under an hour on eight cores.** Exact, with no per-shortcut approximation needed.
+cells, so scoring the whole corpus is **0.69 trillion cells, about 6.6 core-hours** — exact,
+with no per-shortcut approximation needed.
 
-The `n × m` shape does mean cost is quadratic in trajectory length at a fixed compression
-rate, so the long GeoLife tracks dominate here as they do everywhere else; see the length
-distributions in [datasets.md](datasets.md).
+### Where that time goes
+
+`n × m` means cost is quadratic in trajectory length at a fixed compression rate, so it lands
+almost entirely on GeoLife:
+
+| Dataset | Gcells | one core |
+|---|---:|---:|
+| `geolife` | 537.0 | 308 min |
+| `mopsi` | 89.6 | 51 min |
+| `ngsim-us-101` | 29.2 | 17 min |
+| `ngsim-i-80` | 26.6 | 15 min |
+| `mot-mot20` | 4.6 | 3 min |
+| `ngsim-lankershim` | 2.6 | 1 min |
+| `mot-dancetrack` | 1.7 | 1 min |
+| `mot-mot17` | 1.2 | 1 min |
+| `ngsim-peachtree` | 1.1 | 1 min |
+| **total** | **693.6** | **6.6 h** |
+
+**GeoLife is 77% of the work**, so splitting by dataset alone achieves nothing — it finishes in
+five hours gated by one core. The split has to be *within* GeoLife, which is what
+`ssk_frechet --shard` is for.
+
+### It is bounded, unlike DOTS
+
+The important difference from the simplification sweep: this cost is **predictable in advance**.
+Cells are `n × m` exactly and each costs a known 34.45 ns, so the table above is arithmetic
+rather than extrapolation. The worst single trajectory in the corpus, `geolife-001523` at
+92 645 points, comes to 25.3 Gcells — **15 minutes on one core** for all its rates and
+algorithms together.
+
+Nothing here can stall. There is no search, no frontier and no data-dependent branching, so
+unlike DOTS — where cost depended on a trajectory's *geometry* rather than its length, and one
+64 000-point track consumed 90+ CPU-minutes without finishing — the bill is known before the
+job starts. Working memory is O(min(n, m)) for the frontline, a few hundred kilobytes whatever
+the input.
+
+### The bottleneck is I/O, not arithmetic
+
+The 6.6 core-hours are compute. The job also reads **every one of the ~786 000 result documents
+and their inputs**, which is the access pattern that made the corpus audit take about 2.5 hours
+of wall clock across nine parallel processes while running at 5% CPU.
+
+So a full corpus pass should be planned as **roughly three hours of wall clock**, with the ~50
+minutes of eight-core compute hidden inside it — not the 50 minutes alone. That figure is
+extrapolated from the audit rather than measured for this pipeline, so treat it as an
+expectation to check on the first dataset, not a promise.
