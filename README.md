@@ -14,10 +14,11 @@ src/
   trajio/     Python   dataset formats  ->  our format          (ingestion)
   algo/       C++      the algorithm library; reads our format
     io/                json.{hpp,cpp}, trajectory.{hpp,cpp}
+    simplify/          the Simplifier interface + Douglas-Peucker, SQUISH, DOTS
   viz/        Python   renders trajectories and results to an image
 
 data/            downloads, converted trajectories, generated curves, images (git-ignored)
-docs/            datasets.md, trajio.md
+docs/            datasets.md, trajio.md, simplification.md
 scripts/         entry points and experiment drivers
 tests/           C++ unit tests
 
@@ -157,6 +158,20 @@ auto doc = ssk::io::read_trajectory_file("data/trajectories/mopsi/mopsi-000002.j
 `io/json` is a small hand-written JSON value, parser and writer, so the build stays offline
 instead of pulling a third-party library. `io/trajectory` is the document layer on top of
 it: dimension-agnostic, and strict about a point that disagrees with `dim`.
+
+`simplify/` holds the `Simplifier<D>` interface and three baselines ported from their
+reference implementations — Douglas–Peucker, SQUISH and DOTS:
+
+```cpp
+#include "simplify/douglas_peucker.hpp"
+
+const auto curve = ssk::simplify::curve_of<2>(doc);
+ssk::simplify::DouglasPeucker<2> dp({{"tol", 1e-4}});
+const auto kept = dp.indices(curve);      // positions into `curve`
+```
+
+See [`docs/simplification.md`](docs/simplification.md) for the interface, the parameter
+scales, and what was changed from each upstream.
 
 ### `src/viz/` — pictures out
 

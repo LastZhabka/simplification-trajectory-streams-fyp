@@ -21,7 +21,8 @@ FYP. The algorithm is being rewritten; what exists now is the tooling around it.
 | `src/viz/` | Python. Renders trajectories and results. | The only part that needs installed packages (matplotlib, `Agg` backend). |
 | `data/` | `downloads/` `trajectories/` `synthetic/` `renders/` | All git-ignored. Gigabytes, and licence-restricted. Commands are committed, data is not. |
 | `tests/` | C++ unit tests. | Own ~60-line harness — GoogleTest via FetchContent would break an offline configure. |
-| `docs/` | `datasets.md`, `trajio.md` | Measured numbers, not quoted ones. |
+| `src/algo/simplify/` | `Simplifier<D>` + Douglas-Peucker, SQUISH, DOTS. | Ports of the reference implementations, not reinventions — match upstream behaviour and record any deviation in `docs/simplification.md`. Dimension is a template parameter; `simplify()` returns points because a future algorithm may invent them, and `SubsetSimplifier` adds `indices()` for the ones that don't. |
+| `docs/` | `datasets.md`, `trajio.md`, `simplification.md` | Measured numbers, not quoted ones. |
 | `scripts/` | Entry points, experiment drivers. | Empty so far. |
 
 **One format everywhere:** `{"dim": 2, "name": "...", "t_unit": "unix_ms", "t": [...],
