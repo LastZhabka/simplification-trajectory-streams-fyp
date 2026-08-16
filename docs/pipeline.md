@@ -17,6 +17,7 @@ of every trajectory at every compression rate. What the experiment is *for* is
 | `--rates N` | 6 | deepest compression rate, `1/2^N` |
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process only every Nth trajectory, starting at I |
+| `--no-dots` | off | run DPn and SQUISH only — see *The one trajectory DOTS does not cover* |
 
 Output lands at `<out>/<algorithm>/<dataset>/m<rate>/<name>.json`, one document per
 trajectory per algorithm per rate. The dataset name comes from the input directory, so
@@ -104,6 +105,45 @@ distributions in [datasets.md](datasets.md) for why this is a GeoLife problem sp
 The document count is predictable rather than emergent: a rate is only produced when its
 budget stays at or above 2 vertices, and 5 for SQUISH, so summing the qualifying rates over
 all three algorithms gives 786 642 exactly — which every dataset has matched to the document.
+
+## The one trajectory DOTS does not cover
+
+**`geolife/geolife-013552.json`, 64 483 points, has DPn and SQUISH results but no DOTS
+results.** The corpus is otherwise complete: DOTS covers 18 669 of GeoLife's 18 670
+trajectories and every trajectory in the other eight datasets.
+
+It is not a size limit. Fifteen of the sixteen trajectories over 40 000 points completed
+normally, including `geolife-001523` at **92 645 points** — 43% larger — which came through in
+the first unsharded run. `geolife-014000` at 33 361 points takes seconds. Whatever makes
+`013552` expensive is a property of its geometry keeping DOTS' frontier alive, not its length,
+and it is the only trajectory in 47 916 that behaves this way. Left running, its budget search
+consumed over 90 CPU-minutes without finishing, four separate times.
+
+To reproduce the state on disk:
+
+```sh
+ssk_simplify --in <dir containing only geolife-013552.json named geolife> \
+             --out data/simplified-trajectories --no-dots
+```
+
+**What is understood, and what is not.** The budget search had a real defect, since fixed: not
+every budget is reachable, because output size is a step function of the threshold, and here
+the m = 1 budget of 32 242 sits above the 31 197 points DOTS emits at *any* threshold — it
+always takes some shortcut. The search could therefore never hit the target exactly and
+halved its bracket down to a width of `1e-9` in log space, which is meaningless precision for
+an integer-valued function. It now stops once the bracket's two ends have gone three halvings
+without moving, which is the point at which it is only refining the location of a step it has
+already bracketed. `sweep/dots gives up on a budget it cannot reach` pins that, and
+`sweep/dots reaches the same budgets as an independent search` pins that the results did not
+change.
+
+**That fix did not make `013552` tractable**, so it is not the root cause. Individual DOTS
+runs on this trajectory measure 0.2–2.7 s across the thresholds sampled, and the search is
+bounded well under a hundred evaluations per rate, which does not add up to 90 minutes. The
+remaining explanation has to be that the search visits thresholds far more expensive than any
+sampled, or that some evaluation does not terminate in the time expected. **This is not
+diagnosed.** Anyone picking it up should trace every evaluation — threshold, resulting size
+and elapsed time — rather than trusting the arithmetic above.
 
 ## Checking a run
 

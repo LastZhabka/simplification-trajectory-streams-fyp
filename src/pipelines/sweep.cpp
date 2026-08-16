@@ -72,10 +72,20 @@ Sweep sweep_squish(const Curve<2>& curve, const Context& in, int max_m) {
 // as one problem, smallest threshold first, each solved bound flooring the next; and every
 // evaluation is memoised, with the bracket seeded by interpolating the counts already seen.
 // Measured at 6.1 DOTS runs per budget, against 40 for an independent flat bisection.
+//
+// Not every budget is reachable. The output size is a step function of the threshold, so a
+// target can fall in a gap between two attained sizes -- on geolife-013552 the m=1 budget is
+// 32 242 while DOTS never emits more than 31 197, because it always takes some shortcut. Once
+// the bracket's two ends stop moving, the search is only refining the location of a single
+// step it has already found on both sides, and every further evaluation returns a size it has
+// already seen. kStable stops that; without it the search ran the bracket down to kTight,
+// which is meaningless precision for an integer-valued step function and cost hours on the
+// longest trajectories.
 Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m) {
   constexpr double kFirstHi = 1e4;
   constexpr double kGrow = 1e6;      // widen the upper bound until it collapses the curve
-  constexpr double kTight = 1e-9;    // bracket width in log space at which to give up
+  constexpr double kTight = 1e-6;    // bracket width in log space at which to give up
+  constexpr int kStable = 3;         // halvings with neither end moving before giving up
 
   Sweep sweep{"dots", {}};
   int runs = 0;
@@ -116,7 +126,8 @@ Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m) {
       }
     }
 
-    while (b - a > kTight) {
+    int stable = 0;
+    while (b - a > kTight && stable < kStable) {
       double mid = 0.5 * (a + b);
       const auto ia = seen.find(a);
       const auto ib = seen.find(b);
@@ -129,14 +140,17 @@ Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m) {
         }
       }
       const std::size_t k = eval(mid);
+      const std::size_t was = (ib != seen.end()) ? ib->second : 0;
       if (k <= target) {
         best_log = mid;
         b = mid;
         if (k == target) {
           break;
         }
+        stable = (k == was) ? stable + 1 : 0;
       } else {
         a = mid;
+        stable = (ia != seen.end() && k == ia->second) ? stable + 1 : 0;
       }
     }
 

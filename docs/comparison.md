@@ -110,6 +110,13 @@ strictly easier size problem, and that belongs in the caption rather than in a f
 online property that is the entire point of the algorithm. A table that mixes it with the
 streaming algorithms without saying so is claiming something false.
 
+**And say where a baseline is missing.** DOTS covers 47 915 of the corpus' 47 916
+trajectories: `geolife-013552` is excluded because its budget search does not finish in
+reasonable time, while DPn and SQUISH handle it in under a second. Any per-dataset aggregate
+over GeoLife is therefore computed on one fewer trajectory for DOTS than for the others —
+negligible at 0.005%, but it is the kind of asymmetry that has to be stated rather than
+discovered. See [pipeline.md](pipeline.md) for what is and is not understood about it.
+
 ## Other protocols, and why this one
 
 Fixing the rate is one of five defensible choices:

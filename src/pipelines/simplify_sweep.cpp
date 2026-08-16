@@ -35,6 +35,7 @@ struct Options {
   int limit = 0;   // 0 means every trajectory
   int shard = 0;   // this worker's index, for splitting one dataset across processes
   int shards = 1;
+  bool dots = true;
 };
 
 Options parse_args(int argc, char** argv) {
@@ -54,13 +55,17 @@ Options parse_args(int argc, char** argv) {
       opt.shard = std::atoi(argv[++i]);
     } else if (arg == "--shards" && has_value) {
       opt.shards = std::atoi(argv[++i]);
+    } else if (arg == "--no-dots") {
+      opt.dots = false;
     } else {
-      std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N] [--shard I --shards N]\n");
+      std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N] "
+                   "[--shard I --shards N] [--no-dots]\n");
       std::exit(2);
     }
   }
   if (opt.in.empty()) {
-    std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N] [--shard I --shards N]\n");
+    std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N] "
+                   "[--shard I --shards N] [--no-dots]\n");
     std::exit(2);
   }
   return opt;
@@ -113,7 +118,9 @@ int main(int argc, char** argv) {
     std::vector<pipelines::Sweep> sweeps{pipelines::sweep_dpn(curve, opt.rates)};
     if (in.t.size() == curve.size()) {
       sweeps.push_back(pipelines::sweep_squish(curve, in, opt.rates));
-      sweeps.push_back(pipelines::sweep_dots(curve, in, opt.rates));
+      if (opt.dots) {
+        sweeps.push_back(pipelines::sweep_dots(curve, in, opt.rates));
+      }
     } else {
       ++no_clock;
     }

@@ -363,6 +363,11 @@ doubling of length costs DOTS 2.1×, then 2.4×, 3.4×, 4.9×. This is why `ssk_
 contiguous blocks: a block split drops all five GeoLife giants into one worker and that
 worker becomes the run.
 
+Sixteen trajectories exceed 40 000 points and **all sixteen are in GeoLife**; the longest
+outside it is 31 741 (Mopsi). Fifteen of the sixteen simplify without incident. The
+exception, `geolife-013552`, is documented in [pipeline.md](pipeline.md) — and it is not the
+largest, which is why the cutoff there is a name and not a length.
+
 **Length decides how many rates a trajectory supports.** A budget of `ceil(N / 2^m)` must
 stay at or above 2 vertices, and at or above 5 for SQUISH, so a short trajectory contributes
 to the shallow rates only. That is why `>= 64` points (all six rates for DPn and DOTS) and

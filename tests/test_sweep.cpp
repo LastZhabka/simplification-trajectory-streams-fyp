@@ -116,6 +116,36 @@ TEST("sweep/dots searches its threshold to the budget") {
   }
 }
 
+// A budget DOTS cannot reach: the output size is a step function of the threshold, so a
+// target can sit in a gap between two attained sizes. The search must notice that its bracket
+// has stopped moving rather than halve it into meaningless precision -- on the longest
+// GeoLife trajectory that cost hours.
+TEST("sweep/dots gives up on a budget it cannot reach") {
+  const Curve<2> c = wander(400);
+  const Context in = uniform_time(c.size());
+  const Sweep sweep = ssk::pipelines::sweep_dots(c, in, 6);
+
+  int unreachable = 0;
+  for (const Run& run : sweep.runs) {
+    ::ssk::test::check(run.indices.size() <= run.target, "dots: over budget");
+    if (run.indices.size() != run.target) {
+      ++unreachable;
+      CHECK_MSG(run.algorithm_runs < 30,
+                "an unreachable budget must not run the bracket to exhaustion");
+    }
+  }
+
+  // Whatever the search settles on, the recorded threshold has to reproduce the points it
+  // recorded -- that is what makes a result document replayable.
+  for (const Run& run : sweep.runs) {
+    const double th = run.params.front().second;
+    const auto again =
+        ssk::simplify::Dots(ssk::simplify::Params{{"lssd_threshold", th}}).indices(c, in);
+    CHECK_MSG(again == run.indices, "the recorded threshold must reproduce the result");
+  }
+  (void)unreachable;
+}
+
 TEST("sweep/dots reaches the same budgets as an independent search") {
   const Curve<2> c = wander(150);
   const Context in = uniform_time(c.size());
