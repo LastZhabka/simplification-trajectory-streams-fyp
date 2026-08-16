@@ -166,6 +166,15 @@ Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m) {
   return sweep;
 }
 
+bool ordered(const Run& run) {
+  for (std::size_t i = 1; i < run.indices.size(); ++i) {
+    if (run.indices[i - 1] >= run.indices[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 json::Value run_to_json(const io::Document& doc, const std::string& source,
                         const std::string& algorithm, const Run& run) {
   io::Trajectory points;

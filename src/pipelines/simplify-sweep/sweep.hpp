@@ -46,6 +46,16 @@ Sweep sweep_dpn(const Curve<2>& curve, int max_m);
 Sweep sweep_squish(const Curve<2>& curve, const Context& in, int max_m);
 Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m);
 
+// Whether the run's indices are strictly increasing, which is what makes its points a
+// subsequence of the input rather than a reordering of one.
+//
+// This is not a formality. DotsSimplifier's path decode steps backwards on some inputs -- the
+// defect is in the original, and our port reproduces it faithfully -- and a document whose
+// points are out of order is not a simplification of anything a consumer can use. The driver
+// drops such runs rather than writing them; see
+// archive/[2026-08-16] Incident - DOTS emits non-monotone indices.md.
+[[nodiscard]] bool ordered(const Run& run);
+
 // One run as a result document: the kept points and their timestamps, plus `algorithm`,
 // `mode`, `params` and `stats`. The input size goes in `stats.input_size`, not a top-level
 // `input_points` -- viz reads that key as the input *points*, to draw under the result.

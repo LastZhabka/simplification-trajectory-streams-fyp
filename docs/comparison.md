@@ -110,12 +110,20 @@ strictly easier size problem, and that belongs in the caption rather than in a f
 online property that is the entire point of the algorithm. A table that mixes it with the
 streaming algorithms without saying so is claiming something false.
 
-**And say where a baseline is missing.** DOTS covers 47 915 of the corpus' 47 916
-trajectories: `geolife-013552` is excluded because its budget search does not finish in
-reasonable time, while DPn and SQUISH handle it in under a second. Any per-dataset aggregate
-over GeoLife is therefore computed on one fewer trajectory for DOTS than for the others —
-negligible at 0.005%, but it is the kind of asymmetry that has to be stated rather than
-discovered. See [pipeline.md](pipeline.md) for what is and is not understood about it.
+**And say where a baseline is missing.** DOTS holds 271 190 of the 272 230 operating points it
+should, and the shortfall is entirely its own — DPn and SQUISH are complete.
+
+Two causes. `geolife-013552` is excluded outright because its budget search does not finish in
+reasonable time, while DPn and SQUISH handle it in under a second. And **1 034 of its results
+were removed** after a full-corpus audit found them not to be subsequences of their inputs, a
+defect reproduced in the original `DotsSimplifier` — see
+`archive/[2026-08-16] Incident - 1034 corpus documents removed.md`.
+
+The shortfall is 0.38% overall but **19.9% in its worst cell**: at m1 on `ngsim-us-101`, DOTS
+covers 2 280 of 2 847 trajectories against 2 847 for the other two. Any error averaged over
+that cell is averaged over a fifth fewer trajectories for DOTS, and the missing fifth is not
+random — it is where the decode misbehaved. A per-cell trajectory count belongs in any table
+that puts the three side by side.
 
 ## Other protocols, and why this one
 

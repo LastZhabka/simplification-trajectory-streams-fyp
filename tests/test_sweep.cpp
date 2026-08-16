@@ -228,6 +228,39 @@ TEST("sweep/a result document without a clock omits t") {
   CHECK(ssk::io::read_trajectory(read).points.size() == 4);
 }
 
+// DotsSimplifier's path decode steps backwards on some real inputs -- the defect is upstream's
+// and our port reproduces it -- so the driver has to recognise a run whose points are not a
+// subsequence and refuse to write it. Everything the sweeps normally produce passes.
+TEST("sweep/ordered rejects a run whose indices step backwards") {
+  Run good;
+  good.indices = {0, 3, 7, 11};
+  CHECK(ssk::pipelines::ordered(good));
+
+  Run backwards;
+  backwards.indices = {0, 3, 1667, 1664, 4000};
+  CHECK_MSG(!ssk::pipelines::ordered(backwards), "a backwards step must be caught");
+
+  Run repeated;
+  repeated.indices = {0, 5, 5, 9};
+  CHECK_MSG(!ssk::pipelines::ordered(repeated), "a repeated index is not a subsequence either");
+
+  Run trivial;
+  trivial.indices = {0};
+  CHECK(ssk::pipelines::ordered(trivial));
+}
+
+TEST("sweep/every run the sweeps produce here is ordered") {
+  const Curve<2> c = wander(300);
+  const Context in = uniform_time(c.size());
+  for (const Sweep& sweep : {ssk::pipelines::sweep_dpn(c, 6),
+                             ssk::pipelines::sweep_squish(c, in, 6),
+                             ssk::pipelines::sweep_dots(c, in, 6)}) {
+    for (const Run& run : sweep.runs) {
+      ::ssk::test::check(ssk::pipelines::ordered(run), sweep.algorithm + ": run not ordered");
+    }
+  }
+}
+
 TEST("sweep/a curve too short to halve produces no runs") {
   const Curve<2> tiny = wander(2);
   CHECK(ssk::pipelines::sweep_dpn(tiny, 6).runs.empty());

@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
   }
 
   const auto started = std::chrono::steady_clock::now();
-  std::size_t points = 0, written = 0, no_clock = 0;
+  std::size_t points = 0, written = 0, no_clock = 0, unordered = 0;
   for (const fs::path& file : files) {
     const io::Document doc = io::read_trajectory_file(file.string());
     const auto curve = simplify::curve_of<2>(doc);
@@ -128,6 +128,13 @@ int main(int argc, char** argv) {
     const std::string source = dataset + "/" + file.filename().string();
     for (const pipelines::Sweep& sweep : sweeps) {
       for (const pipelines::Run& run : sweep.runs) {
+        if (!pipelines::ordered(run)) {
+          ++unordered;
+          std::fprintf(stderr, "dropped %s %s/%s m%d: indices not increasing\n",
+                       sweep.algorithm.c_str(), dataset.c_str(),
+                       file.filename().string().c_str(), run.m);
+          continue;
+        }
         const std::string rate = "m" + std::to_string(run.m);
         write_document(fs::path(opt.out) / sweep.algorithm / dataset / rate / file.filename(),
                        pipelines::run_to_json(doc, source, sweep.algorithm, run));
@@ -142,6 +149,10 @@ int main(int argc, char** argv) {
               files.size(), points, written, seconds);
   if (no_clock > 0) {
     std::printf("  %zu without timestamps, simplified by DPn only\n", no_clock);
+  }
+  if (unordered > 0) {
+    std::printf("  %zu runs dropped: indices not increasing, so not a subsequence\n",
+                unordered);
   }
   std::printf("  out: %s/<algorithm>/%s/\n", opt.out.c_str(), dataset.c_str());
   return 0;

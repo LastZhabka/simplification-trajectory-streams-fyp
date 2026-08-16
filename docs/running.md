@@ -171,6 +171,66 @@ is in [pipeline.md](pipeline.md).
 One trajectory is knowingly excluded from DOTS: `geolife-013552` does not finish. Run it with
 `--no-dots` so it still gets Douglas–Peucker and SQUISH results.
 
+### Bad documents cannot be produced
+
+`DotsSimplifier`'s path decode steps backwards on some real inputs — the defect is in the
+original implementation, and our port reproduces it faithfully — so a run can come back whose
+points are **not a subsequence of the input**, which makes it not a simplification of anything.
+It affected 1 034 documents of a corpus of 786 636 before it was caught, 96% of them at m1 and
+90% of them in NGSIM.
+
+**The driver now refuses to write such a run.** Every run is checked for strictly increasing
+indices before it is serialised; a failing one is dropped, reported on stderr, and counted in
+the summary:
+
+```
+ngsim-us-101: 1 trajectories, 1762 points -> 17 documents in 0.2 s
+  1 runs dropped: indices not increasing, so not a subsequence
+```
+
+So a corpus produced by the current driver is clean by construction, and nothing needs cleaning
+up afterwards. What this costs is coverage rather than correctness: DOTS ends up with slightly
+fewer operating points than DPn and SQUISH, unevenly — 80.1% at m1 on `ngsim-us-101`, its worst
+cell. That gap has to be stated in any results table, and
+[comparison.md](comparison.md) says why.
+
+Both incidents are written up in `archive/`.
+
+### Verifying a corpus you did not just produce
+
+The guard covers anything the current driver writes. To check a corpus produced by an older
+driver, or after changing a port, `ssk_audit` reads what is actually on disk and matches each
+result against its input on **position and timestamp together** — coordinates alone give false
+failures wherever a trace repeats a fix:
+
+```sh
+for ds in data/trajectories/*/; do
+  ./build/src/pipelines/audit/ssk_audit --in "$ds" --results data/simplified-trajectories
+done
+```
+
+```powershell
+foreach ($ds in Get-ChildItem data\trajectories -Directory) {
+  .\build\src\pipelines\audit\ssk_audit.exe --in $ds.FullName --results data\simplified-trajectories
+}
+```
+
+It exits non-zero when it finds anything, so it drops straight into a script. `--paths` prints
+only the offending paths, which makes removal a pipe — the tool never deletes anything itself:
+
+```sh
+./build/src/pipelines/audit/ssk_audit --in data/trajectories/ngsim-us-101 \
+    --results data/simplified-trajectories --paths | xargs rm
+```
+
+```powershell
+.\build\src\pipelines\audit\ssk_audit.exe --in data\trajectories\ngsim-us-101 `
+    --results data\simplified-trajectories --paths | Remove-Item
+```
+
+It is not fast — it reads every document — so budget a couple of hours for the whole corpus,
+and run it per dataset in parallel as with the sweep.
+
 ## 6. Measure the error
 
 ```powershell

@@ -7,9 +7,11 @@ a library beside a thin `main` so the tests can drive it without running the bin
 |---|---|---|
 | `simplify-sweep/` | `ssk_simplify` | every baseline's simplification of every trajectory, at every compression rate |
 | `frechet-distance/` | `ssk_frechet` | how far each of those simplifications is from the trajectory it came from |
+| `audit/` | `ssk_audit` | checks result documents on disk against the trajectories they came from |
 
-They run in that order and the second mirrors the first's output tree one for one. What the
-experiment is *for* is [comparison.md](comparison.md); this is how to run it and what it costs.
+The first two run in that order and the second mirrors the first's output tree one for one;
+`ssk_audit` is verification, not a stage. What the experiment is *for* is
+[comparison.md](comparison.md); this is how to run it and what it costs.
 
 ## The sweep
 
