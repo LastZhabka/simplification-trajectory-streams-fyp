@@ -3,9 +3,10 @@
 //
 //   ssk_simplify --in data/trajectories/mopsi --out data/simplified-trajectories
 //
-// writes data/simplified-trajectories/<algorithm>/mopsi/<name>.json, one document per
-// trajectory per algorithm, holding every rate. SQUISH and DOTS need timestamps, so a
-// document without a clock is simplified by DPn alone.
+// writes data/simplified-trajectories/<algorithm>/mopsi/m<rate>/<name>.json, one document per
+// trajectory per algorithm per rate. Each is a trajectory document -- points and their
+// timestamps -- with the result fields on top, so it reads and draws like any other. SQUISH
+// and DOTS need timestamps, so a document without a clock is simplified by DPn alone.
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -96,12 +97,12 @@ int main(int argc, char** argv) {
 
     const std::string source = dataset + "/" + file.filename().string();
     for (const pipelines::Sweep& sweep : sweeps) {
-      if (sweep.runs.empty()) {
-        continue;
+      for (const pipelines::Run& run : sweep.runs) {
+        const std::string rate = "m" + std::to_string(run.m);
+        write_document(fs::path(opt.out) / sweep.algorithm / dataset / rate / file.filename(),
+                       pipelines::run_to_json(doc, source, sweep.algorithm, run));
+        ++written;
       }
-      write_document(fs::path(opt.out) / sweep.algorithm / dataset / file.filename(),
-                     pipelines::to_json(doc, source, sweep));
-      ++written;
     }
   }
 

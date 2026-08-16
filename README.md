@@ -182,12 +182,17 @@ scales, and what was changed from each upstream.
 
 Simplifies every trajectory in a dataset directory with all three baselines, at a fixed
 compression rate of 1/2^m for m = 1…6, and writes
-`data/simplified-trajectories/<algorithm>/<dataset>/<name>.json` — one document per
-trajectory per algorithm, holding every rate with the hyper-parameters that produced it.
+`data/simplified-trajectories/<algorithm>/<dataset>/m<rate>/<name>.json` — one document per
+trajectory per algorithm per rate.
 
-Results store **indices**, not points: all three baselines return a subsequence of the input,
-so indices rehydrate exactly from `source` at about a third of the bytes. `--rates` changes
-the deepest rate, `--limit` stops after N trajectories.
+Each result is a **trajectory document in its own right**: the kept points and their
+timestamps, so `io/trajectory` reads it as a curve and `viz/plot.py` draws it with no
+rehydration step. On top of that it carries `algorithm`, `mode`, the `params` that produced
+it — `count`, `buffer_size`, or the threshold DOTS' search resolved to — `stats`, and
+`source` naming the input it came from. `--rates` changes the deepest rate, `--limit` stops
+after N trajectories.
+
+Budget: about 4.3× the input on disk, and roughly 14 documents per trajectory.
 
 Why a fixed compression rate rather than a fixed tolerance, and what the resulting numbers
 can and cannot claim, is [`docs/comparison.md`](docs/comparison.md).

@@ -5,9 +5,10 @@
 // its threshold has to be searched for -- see sweep_dots. The protocol and what it is for are
 // in docs/comparison.md.
 //
-// A Sweep is one algorithm's whole set of rates for one trajectory, which is what lands in
-// one output document. Indices, not points: all three algorithms return a subsequence, so
-// indices are lossless and a third of the size.
+// A Sweep is one algorithm's whole set of rates for one trajectory. Each rate is written as
+// its own document: a trajectory document -- points, and the timestamps that go with them --
+// carrying the result fields on top, so `io::read_trajectory` reads it as a curve and
+// `viz/plot.py` draws it without a rehydration step.
 #pragma once
 
 #include <cstddef>
@@ -45,7 +46,10 @@ Sweep sweep_dpn(const Curve<2>& curve, int max_m);
 Sweep sweep_squish(const Curve<2>& curve, const Context& in, int max_m);
 Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m);
 
-// The output document: the sweep, plus enough provenance to rehydrate points from `source`.
-json::Value to_json(const io::Document& doc, const std::string& source, const Sweep& sweep);
+// One run as a result document: the kept points and their timestamps, plus `algorithm`,
+// `mode`, `params` and `stats`. The input size goes in `stats.input_size`, not a top-level
+// `input_points` -- viz reads that key as the input *points*, to draw under the result.
+json::Value run_to_json(const io::Document& doc, const std::string& source,
+                        const std::string& algorithm, const Run& run);
 
 }  // namespace ssk::pipelines

@@ -12,11 +12,11 @@ namespace {
 
 using simplify::Params;
 
-json::Array indices_to_json(const std::vector<std::size_t>& indices) {
+json::Array times_at(const std::vector<double>& t, const std::vector<std::size_t>& indices) {
   json::Array out;
   out.reserve(indices.size());
   for (const std::size_t i : indices) {
-    out.emplace_back(i);
+    out.emplace_back(t[i]);
   }
   return out;
 }
@@ -152,33 +152,45 @@ Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m) {
   return sweep;
 }
 
-json::Value to_json(const io::Document& doc, const std::string& source, const Sweep& sweep) {
-  json::Array runs;
-  for (const Run& run : sweep.runs) {
-    json::Object params;
-    for (const auto& [key, value] : run.params) {
-      params[key] = json::Value(value);
-    }
-    runs.emplace_back(json::Object{
-        {"m", json::Value(run.m)},
-        {"rate", json::Value(std::pow(2.0, run.m))},
-        {"target", json::Value(run.target)},
-        {"kept", json::Value(run.indices.size())},
-        {"params", json::Value(std::move(params))},
-        {"algorithm_runs", json::Value(run.algorithm_runs)},
-        {"indices", json::Value(indices_to_json(run.indices))},
-    });
+json::Value run_to_json(const io::Document& doc, const std::string& source,
+                        const std::string& algorithm, const Run& run) {
+  io::Trajectory points;
+  points.reserve(run.indices.size());
+  for (const std::size_t i : run.indices) {
+    points.push_back(doc.points[i]);
   }
 
+  json::Object params;
+  for (const auto& [key, value] : run.params) {
+    params[key] = json::Value(value);
+  }
+
+  const auto kept = static_cast<double>(run.indices.size());
+  json::Object stats{
+      {"input_size", json::Value(doc.points.size())},
+      {"output_size", json::Value(run.indices.size())},
+      {"compression", json::Value(kept == 0.0 ? 0.0 : static_cast<double>(doc.points.size()) / kept)},
+      {"m", json::Value(run.m)},
+      {"rate", json::Value(std::pow(2.0, run.m))},
+      {"target", json::Value(run.target)},
+      {"algorithm_runs", json::Value(run.algorithm_runs)},
+  };
+
   json::Object out{
-      {"algorithm", json::Value(sweep.algorithm)},
       {"dim", json::Value(doc.dim)},
+      {"points", io::points_to_json(points)},
+      {"algorithm", json::Value(algorithm)},
+      {"mode", json::Value("budget")},
+      {"params", json::Value(std::move(params))},
+      {"stats", json::Value(std::move(stats))},
       {"source", json::Value(source)},
-      {"input_points", json::Value(doc.points.size())},
-      {"runs", json::Value(std::move(runs))},
   };
   if (!doc.name.empty()) {
     out["name"] = json::Value(doc.name);
+  }
+  if (!doc.t.empty()) {
+    out["t"] = json::Value(times_at(doc.t, run.indices));
+    out["t_unit"] = json::Value(doc.t_unit);
   }
   return json::Value(std::move(out));
 }

@@ -1,6 +1,7 @@
 #include "io/json.hpp"
 
 #include <cctype>
+#include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -8,6 +9,7 @@
 #include <ostream>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 
 namespace ssk::json {
 
@@ -52,9 +54,12 @@ void write_number(std::ostream& out, double d) {
     out << static_cast<long long>(d);
     return;
   }
+  // Shortest representation that reads back as the same double: `%.17g` also round-trips,
+  // but writes 62.615876999999998 where 62.615877 is exact and half the bytes -- which a
+  // directory full of simplified trajectories notices.
   char buf[40];
-  std::snprintf(buf, sizeof buf, "%.17g", d);
-  out << buf;
+  const auto [end, ec] = std::to_chars(buf, buf + sizeof buf, d);
+  out << std::string_view(buf, static_cast<std::size_t>(end - buf));
 }
 
 void pad(std::ostream& out, int indent, int depth) {

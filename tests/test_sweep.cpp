@@ -141,40 +141,61 @@ TEST("sweep/dots reaches the same budgets as an independent search") {
   }
 }
 
-TEST("sweep/the document carries its parameters and rehydrates") {
+TEST("sweep/a result document carries its parameters and reads back as a trajectory") {
   const auto doc = ssk::io::read_trajectory(ssk::json::parse(
-      R"({"dim": 2, "name": "toy/1", "t": [0,1,2,3,4,5,6,7,8,9],
+      R"({"dim": 2, "name": "toy/1", "t_unit": "ms", "t": [0,1,2,3,4,5,6,7,8,9],
           "points": [[0,0],[1,4],[2,0],[3,5],[4,0],[5,6],[6,0],[7,3],[8,0],[9,1]]})"));
   const auto c = ssk::simplify::curve_of<2>(doc);
   const Sweep sweep = ssk::pipelines::sweep_dpn(c, 2);
-  const auto written = ssk::pipelines::to_json(doc, "toy/toy-1.json", sweep);
+  const Run& run = sweep.runs.front();
+  const auto written =
+      ssk::pipelines::run_to_json(doc, "toy/toy-1.json", sweep.algorithm, run);
 
   // Through a round trip, so the test covers what actually lands on disk.
   const auto read = ssk::json::parse(written.dump());
   CHECK(read.find("algorithm")->str() == "douglas-peucker-n");
+  CHECK(read.find("mode")->str() == "budget");
   CHECK(read.find("source")->str() == "toy/toy-1.json");
   CHECK(read.find("name")->str() == "toy/1");
-  CHECK(read.find("input_points")->num() == 10.0);
-  CHECK(read.find("dim")->num() == 2.0);
-
-  const auto& runs = read.find("runs")->arr();
-  CHECK(runs.size() == sweep.runs.size());
-  const auto& first = runs.front();
-  CHECK(first.find("m")->num() == 1.0);
-  CHECK(first.find("rate")->num() == 2.0);
-  CHECK(first.find("target")->num() == 5.0);
-  CHECK(first.find("kept")->num() == 5.0);
-  CHECK_MSG(first.find("params")->find("count")->num() == 5.0,
+  CHECK_MSG(read.find("input_points") == nullptr,
+            "viz reads input_points as the input points themselves, so the count is a stat");
+  CHECK_MSG(read.find("params")->find("count")->num() == 5.0,
             "the hyper-parameter used must travel with the result");
 
-  const auto& indices = first.find("indices")->arr();
-  CHECK(indices.size() == 5);
-  for (std::size_t i = 0; i < indices.size(); ++i) {
-    const auto at = static_cast<std::size_t>(indices[i].num());
-    ::ssk::test::check(at < doc.points.size(), "index must address the source document");
-    ::ssk::test::check_close(doc.points[at][0], c[sweep.runs.front().indices[i]][0], 1e-12,
-                             "an index must rehydrate to the point it named");
+  const auto* stats = read.find("stats");
+  CHECK(stats->find("input_size")->num() == 10.0);
+  CHECK(stats->find("output_size")->num() == 5.0);
+  CHECK(stats->find("target")->num() == 5.0);
+  CHECK(stats->find("m")->num() == 1.0);
+  CHECK(stats->find("rate")->num() == 2.0);
+  CHECK_CLOSE(stats->find("compression")->num(), 2.0, 1e-12);
+
+  // The result is a trajectory document in its own right: it reads back as a curve, with
+  // one timestamp per surviving point.
+  const auto result = ssk::io::read_trajectory(read);
+  CHECK(result.dim == 2);
+  CHECK(result.points.size() == run.indices.size());
+  CHECK(result.t.size() == run.indices.size());
+  CHECK(result.t_unit == "ms");
+  for (std::size_t i = 0; i < run.indices.size(); ++i) {
+    const std::size_t at = run.indices[i];
+    CHECK_CLOSE(result.points[i][0], doc.points[at][0], 1e-12);
+    CHECK_CLOSE(result.points[i][1], doc.points[at][1], 1e-12);
+    CHECK_MSG(result.t[i] == doc.t[at], "a kept point must keep its own timestamp");
   }
+}
+
+TEST("sweep/a result document without a clock omits t") {
+  const auto doc = ssk::io::read_trajectory(ssk::json::parse(
+      R"({"dim": 2, "points": [[0,0],[1,4],[2,0],[3,5],[4,0],[5,6],[6,0],[7,3]]})"));
+  const auto c = ssk::simplify::curve_of<2>(doc);
+  const Sweep sweep = ssk::pipelines::sweep_dpn(c, 1);
+  const auto read = ssk::json::parse(
+      ssk::pipelines::run_to_json(doc, "toy/toy-2.json", sweep.algorithm, sweep.runs.front())
+          .dump());
+  CHECK(read.find("t") == nullptr);
+  CHECK(read.find("t_unit") == nullptr);
+  CHECK(ssk::io::read_trajectory(read).points.size() == 4);
 }
 
 TEST("sweep/a curve too short to halve produces no runs") {
