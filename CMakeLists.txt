@@ -37,6 +37,8 @@ if(SSK_WARNINGS_AS_ERRORS)
   target_compile_options(ssk PRIVATE $<IF:$<BOOL:${MSVC}>,/WX,-Werror>)
 endif()
 
+add_subdirectory(src/pipelines)
+
 if(SSK_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)

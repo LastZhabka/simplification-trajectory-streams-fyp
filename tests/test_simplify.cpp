@@ -1,5 +1,5 @@
 // The three algorithms share one contract: endpoints kept, output a subsequence of the
-// input, output in order, and a tighter parameter never keeps fewer points.
+// input, output in order, and a tighter parameter never keeps more points.
 #include "simplify/dots.hpp"
 #include "simplify/douglas_peucker.hpp"
 #include "simplify/squish.hpp"
@@ -64,34 +64,43 @@ void check_contract(const std::vector<std::size_t>& out, std::size_t n,
 
 // --- Douglas-Peucker ---------------------------------------------------------------
 
-TEST("simplify/dp keeps a straight line's endpoints only") {
-  Curve<2> line;
-  for (std::size_t i = 0; i < 50; ++i) {
-    line.push_back({static_cast<double>(i), 0.0});
-  }
-  const ssk::simplify::DouglasPeucker<2> dp(Params{{"tol", 0.5}});
-  const auto out = dp.indices(line);
-  check_contract(out, line.size(), "dp");
-  CHECK(out.size() == 2);
-}
-
-TEST("simplify/dp keeps the spikes of a zigzag it cannot flatten") {
-  const Curve<2> c = zigzag(21, 5.0);
-  const ssk::simplify::DouglasPeucker<2> dp(Params{{"tol", 0.5}});
-  const auto out = dp.indices(c);
-  check_contract(out, c.size(), "dp");
-  CHECK_MSG(out.size() == c.size(), "an amplitude far above tol must keep every vertex");
-}
-
-TEST("simplify/dp is monotone in the tolerance") {
-  const Curve<2> c = zigzag(41, 1.0);
-  std::size_t previous = c.size() + 1;
-  for (const double tol : {0.1, 0.5, 2.0, 10.0}) {
-    const ssk::simplify::DouglasPeucker<2> dp(Params{{"tol", tol}});
+TEST("simplify/dp returns exactly the requested vertex count") {
+  const Curve<2> c = wander(200);
+  for (const double count : {2.0, 3.0, 17.0, 100.0, 199.0}) {
+    const ssk::simplify::DouglasPeucker<2> dp(Params{{"count", count}});
     const auto out = dp.indices(c);
     check_contract(out, c.size(), "dp");
-    CHECK_MSG(out.size() <= previous, "a looser tolerance must not keep more points");
-    previous = out.size();
+    CHECK_MSG(out.size() == static_cast<std::size_t>(count),
+              "DPn delivers the budget exactly, not at most");
+  }
+}
+
+TEST("simplify/dp passes a curve through when the budget cannot bind") {
+  const Curve<2> c = wander(20);
+  for (const double count : {20.0, 40.0, 1.0, 0.0}) {
+    const ssk::simplify::DouglasPeucker<2> dp(Params{{"count", count}});
+    const auto out = dp.indices(c);
+    check_contract(out, c.size(), "dp");
+    CHECK_MSG(out.size() == c.size(),
+              "upstream copies the input through rather than failing");
+  }
+}
+
+TEST("simplify/dp simplifications are nested as the budget grows") {
+  const Curve<2> c = wander(120);
+  std::vector<std::size_t> previous;
+  for (const double count : {2.0, 5.0, 13.0, 40.0, 90.0}) {
+    const ssk::simplify::DouglasPeucker<2> dp(Params{{"count", count}});
+    const auto out = dp.indices(c);
+    check_contract(out, c.size(), "dp");
+    for (const std::size_t kept : previous) {
+      bool still_there = false;
+      for (const std::size_t i : out) {
+        still_there = still_there || i == kept;
+      }
+      CHECK_MSG(still_there, "a larger budget must keep every point a smaller one kept");
+    }
+    previous = out;
   }
 }
 
@@ -102,10 +111,10 @@ TEST("simplify/dp works in 3D") {
     c.push_back({d, 0.0, 0.0});
   }
   c[20] = {20.0, 9.0, 9.0};
-  const ssk::simplify::DouglasPeucker<3> dp(Params{{"tol", 1.0}});
+  const ssk::simplify::DouglasPeucker<3> dp(Params{{"count", 5.0}});
   const auto out = dp.indices(c);
   check_contract(out, c.size(), "dp3");
-  CHECK_MSG(out.size() < c.size(), "3D simplification must drop something");
+  CHECK(out.size() == 5);
   bool kept_spike = false;
   for (const std::size_t i : out) {
     kept_spike = kept_spike || i == 20;
@@ -115,7 +124,7 @@ TEST("simplify/dp works in 3D") {
 
 TEST("simplify/dp simplify() returns the points the indices name") {
   const Curve<2> c = zigzag(21, 5.0);
-  const ssk::simplify::DouglasPeucker<2> dp(Params{{"tol", 0.5}});
+  const ssk::simplify::DouglasPeucker<2> dp(Params{{"count", 8.0}});
   const auto idx = dp.indices(c);
   const auto pts = dp.simplify(c);
   CHECK(pts.size() == idx.size());
@@ -228,7 +237,7 @@ TEST("simplify/all reject a missing clock when they need one") {
 TEST("simplify/all pass through a curve too short to simplify") {
   Curve<2> two{{0.0, 0.0}, {1.0, 1.0}};
   const Context in = uniform_time(2);
-  CHECK(ssk::simplify::DouglasPeucker<2>(Params{{"tol", 0.1}}).indices(two).size() == 2);
+  CHECK(ssk::simplify::DouglasPeucker<2>(Params{{"count", 2.0}}).indices(two).size() == 2);
   CHECK(ssk::simplify::Dots(Params{{"lssd_threshold", 1.0}}).indices(two, in).size() == 2);
   CHECK(ssk::simplify::Squish(Params{{"buffer_size", 8}}).indices(two, in).size() == 2);
 }
@@ -278,7 +287,7 @@ TEST("simplify/a non-subset algorithm needs only simplify()") {
 TEST("simplify/subset algorithms agree between simplify and indices") {
   const Curve<2> c = zigzag(41, 1.0);
   const Context in = uniform_time(c.size());
-  const ssk::simplify::DouglasPeucker<2> dp(Params{{"tol", 0.4}});
+  const ssk::simplify::DouglasPeucker<2> dp(Params{{"count", 9.0}});
   const ssk::simplify::Squish sq(Params{{"buffer_size", 12}});
   const ssk::simplify::Dots dt(Params{{"lssd_threshold", 0.5}});
 
@@ -303,10 +312,10 @@ TEST("simplify/all reproduce the upstream reference output") {
   const Context in = uniform_time(c.size());
 
   using Idx = std::vector<std::size_t>;
-  CHECK(ssk::simplify::DouglasPeucker<2>(Params{{"tol", 0.5}}).indices(c) ==
-        Idx({0, 1, 4, 6, 8, 11, 13, 14, 17, 21, 27, 29, 34, 39}));
-  CHECK(ssk::simplify::DouglasPeucker<2>(Params{{"tol", 1.0}}).indices(c) ==
-        Idx({0, 1, 6, 13, 17, 21, 27, 29, 39}));
+  CHECK(ssk::simplify::DouglasPeucker<2>(Params{{"count", 5.0}}).indices(c) ==
+        Idx({0, 13, 17, 21, 39}));
+  CHECK(ssk::simplify::DouglasPeucker<2>(Params{{"count", 12.0}}).indices(c) ==
+        Idx({0, 1, 6, 8, 11, 13, 17, 21, 27, 32, 34, 39}));
   CHECK(ssk::simplify::Squish(Params{{"buffer_size", 5}}).indices(c, in) ==
         Idx({0, 9, 14, 27, 39}));
   CHECK(ssk::simplify::Squish(Params{{"buffer_size", 9}}).indices(c, in) ==

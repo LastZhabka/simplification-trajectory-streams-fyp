@@ -166,12 +166,31 @@ reference implementations — Douglas–Peucker, SQUISH and DOTS:
 #include "simplify/douglas_peucker.hpp"
 
 const auto curve = ssk::simplify::curve_of<2>(doc);
-ssk::simplify::DouglasPeucker<2> dp({{"tol", 1e-4}});
+ssk::simplify::DouglasPeucker<2> dp({{"count", 32}});
 const auto kept = dp.indices(curve);      // positions into `curve`
 ```
 
 See [`docs/simplification.md`](docs/simplification.md) for the interface, the parameter
 scales, and what was changed from each upstream.
+
+### `src/pipelines/` — experiments
+
+```sh
+./build/src/pipelines/ssk_simplify --in data/trajectories/mopsi \
+                                   --out data/simplified-trajectories
+```
+
+Simplifies every trajectory in a dataset directory with all three baselines, at a fixed
+compression rate of 1/2^m for m = 1…6, and writes
+`data/simplified-trajectories/<algorithm>/<dataset>/<name>.json` — one document per
+trajectory per algorithm, holding every rate with the hyper-parameters that produced it.
+
+Results store **indices**, not points: all three baselines return a subsequence of the input,
+so indices rehydrate exactly from `source` at about a third of the bytes. `--rates` changes
+the deepest rate, `--limit` stops after N trajectories.
+
+Why a fixed compression rate rather than a fixed tolerance, and what the resulting numbers
+can and cannot claim, is [`docs/comparison.md`](docs/comparison.md).
 
 ### `src/viz/` — pictures out
 

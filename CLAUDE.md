@@ -19,11 +19,11 @@ FYP. The algorithm is being rewritten; what exists now is the tooling around it.
 | `src/trajio/` | Python. Dataset formats → our format. | Standard library only. Readers must run anywhere, and dataset parsing must not depend on the plotting stack. Values are copied verbatim — filtering is a modelling decision, not a reader's. |
 | `src/algo/` | C++20 library `ssk`. Reads our format. | No third-party libraries; the build works offline, hence the hand-rolled JSON in `io/json`. `src/algo` is the include root, so headers are `#include "io/..."`. Algorithm tracks land beside `io/`. |
 | `src/viz/` | Python. Renders trajectories and results. | The only part that needs installed packages (matplotlib, `Agg` backend). |
-| `data/` | `downloads/` `trajectories/` `synthetic/` `renders/` | All git-ignored. Gigabytes, and licence-restricted. Commands are committed, data is not. |
+| `data/` | `downloads/` `trajectories/` `simplified-trajectories/` `synthetic/` `renders/` | All git-ignored. Gigabytes, and licence-restricted. Commands are committed, data is not. |
 | `tests/` | C++ unit tests. | Own ~60-line harness — GoogleTest via FetchContent would break an offline configure. |
 | `src/algo/simplify/` | `Simplifier<D>` + Douglas-Peucker, SQUISH, DOTS. | Ports of the reference implementations, not reinventions — match upstream behaviour and record any deviation in `docs/simplification.md`. Dimension is a template parameter; `simplify()` returns points because a future algorithm may invent them, and `SubsetSimplifier` adds `indices()` for the ones that don't. |
-| `docs/` | `datasets.md`, `trajio.md`, `simplification.md` | Measured numbers, not quoted ones. |
-| `scripts/` | Entry points, experiment drivers. | Empty so far. |
+| `docs/` | `datasets.md`, `trajio.md`, `simplification.md`, `comparison.md` | Measured numbers, not quoted ones. |
+| `src/pipelines/` | Experiment drivers. C++, `ssk_simplify`. | The algorithms are C++, so the driver is too — a Python one would spawn a process per trajectory. Entry points live with their piece under `src/`, as `viz` and `trajio` already do. Sweep logic sits in `sweep.hpp/cpp` so the tests can drive it without running `main`. |
 
 **One format everywhere:** `{"dim": 2, "name": "...", "t_unit": "unix_ms", "t": [...],
 "points": [[x, y], ...]}`. trajio writes it, `algo/io` reads it, `viz` draws it. `t` is

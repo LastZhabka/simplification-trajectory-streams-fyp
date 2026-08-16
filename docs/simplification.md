@@ -85,14 +85,14 @@ Context context_of(const io::Document&);
 const auto doc = ssk::io::read_trajectory_file("data/trajectories/mopsi/mopsi-000001.json");
 const auto curve = ssk::simplify::curve_of<2>(doc);
 
-ssk::simplify::DouglasPeucker<2> dp({{"tol", 1e-4}});
+ssk::simplify::DouglasPeucker<2> dp({{"count", 32}});
 const auto kept = dp.indices(curve);              // positions into `curve`
 const auto out  = dp.simplify(curve);             // or the points themselves
 ```
 
 | Algorithm | Header | Parameters | Needs `t` | Dimensions |
 |---|---|---|---|---|
-| Douglas–Peucker | `simplify/douglas_peucker.hpp` | `tol` | no | any |
+| Douglas–Peucker (DPn) | `simplify/douglas_peucker.hpp` | `count` | no | any |
 | SQUISH | `simplify/squish.hpp` | `buffer_size` (> 4) | yes | 2 |
 | DOTS | `simplify/dots.hpp` | `lssd_threshold`, `k` = 2.0, `max_vk_size` = 1e6 | yes | 2 |
 
@@ -103,29 +103,36 @@ ours, the algorithms are theirs.
 
 ### Douglas–Peucker — [psimpl](https://psimpl.sourceforge.net/) v7 (MPL 1.1)
 
-From `simplify_douglas_peucker` and `DPHelper` in `psimpl.h`.
+From `simplify_douglas_peucker_n` and `DPHelper::ApproximateN` in `psimpl.h` — **the
+point-count variant, DPn, and only that one.** Its knob is a vertex budget, so it needs no
+tolerance and takes no units. See *Why the count variant* below.
 
-*Kept:* the part most reimplementations omit — psimpl runs a **radial-distance pass at the
-same tolerance first** and applies DP to that reduced polyline. Also the point-to-**segment**
-distance (not point-to-line), all comparisons in squared distance, the explicit LIFO stack
-instead of recursion, and the "key index 0 means none found" sentinel.
+*Kept:* the structure exactly. All sub-polylines live in a `std::priority_queue` keyed by the
+squared distance of their furthest point, and each step promotes the *globally* furthest
+point to a key rather than descending one branch at a time — the difference from textbook DP,
+and the reason psimpl calls DPn "slower, but yields better results at lower resolutions" —
+O(n²) worst case, O(n log n) on average, as upstream documents. Also the
+point-to-**segment** distance (not point-to-line), all comparisons in squared distance, the
+"key index 0 means none found" sentinel, the endpoints seeded as keys with `keyCount = 2`, the
+early return at `count == 2`, and the check-after-store break so the budget is exact.
 
-**The radial pass costs the error bound**, and that matters here more than it does to psimpl.
-DP alone keeps every point within `tol` of its simplification; the radial pass first drops
-points within `tol` of the *previous surviving vertex*, and those two errors add. Measured
-over 200 random walks of 300 points: 1.88 `tol` with the pass, exactly 1.00 `tol` without it.
-So `tol` is not a Hausdorff — let alone a Fréchet — bound on this baseline, and comparing it
-against a δ-bounded simplifier means measuring the error rather than assuming it.
+**DPn does not run a radial-distance pass** — psimpl's tolerance form does, at the same `tol`,
+and with no tolerance there is nothing to run it with. That removes the error inflation the
+pass used to cost us: the old `tol` form measured 1.88 `tol` of positional error rather than
+`tol`. DPn makes the point differently — a budget is not an error bound at all, so the error
+is measured either way.
 
 *Changed:* psimpl takes a flat iterator range of interleaved coordinates and writes points;
-this takes `Curve<D>` and returns indices, so the radial pass carries surviving positions
-rather than copying coordinates. `util::scoped_array` became `std::vector`. One numerical
-difference: psimpl computes the projection fraction in `float` deliberately, to dodge
-integer-type division for integer polylines; we are always `double`, so it stays `double`.
-That is marginally more accurate and can move a borderline point.
+this takes `Curve<D>` and returns indices, so upstream's coordinate indices (`keyInfo.index`,
+divided by `DIM` to index `keys`) are point indices here, and no copy of the input is needed.
+`util::scoped_array` became `std::vector`, `SubPolyAlt` + `KeyInfo` collapsed into one
+`SubPoly` carrying its own key. One numerical difference, unchanged from before: psimpl
+computes the projection fraction in `float` deliberately, to dodge integer-type division for
+integer polylines; we are always `double`, so it stays `double`. That is marginally more
+accurate and can move a borderline point — see *Verified against the originals*.
 
-*Dropped:* the other seven algorithms in psimpl, the `_n` (point-count) variant, and the
-error-estimation helpers.
+*Dropped:* the tolerance form `simplify_douglas_peucker` and its radial pre-pass, the other
+seven algorithms in psimpl, and the error-estimation helpers.
 
 *Why psimpl and not the dots repo's own DP:* `DouglasPeuckerBatchSimplifier::simplifyByIndex(
 x, y, out, minimumDistance)` is fixed at 2D and needs Qt. psimpl is header-only, dependency
@@ -180,6 +187,34 @@ a distinct variant from the paper rather than part of DOTS proper, and the `getA
 *Dropped from both dots-repo ports:* the Qt GUI (`mainwindow`, `qcustomplot`), the `.pro`
 build files, `DotsException`, `Helper`, and `AlgorithmComparison`.
 
+## Why the count variant
+
+The experiments run every algorithm at a **fixed compression rate** — a budget of `N / 2^M`
+vertices for each M — and measure the Fréchet error that budget costs. That is the only fair
+axis across these four algorithms, because their knobs are in incomparable units: a tolerance
+in degrees, a point count, and a squared distance summed over points. Fixing the output size
+and comparing error is the comparison; fixing a "tolerance" is not one.
+
+Two of the three baselines take a budget directly, and DPn is now one of them:
+
+| | reaching `N / 2^M` | exact | cost |
+|---|---|---|---|
+| Douglas–Peucker (DPn) | set `count` | always | one run |
+| SQUISH | set `buffer_size` | always, while `> 4` | one run |
+| DOTS | bisect `lssd_threshold` | 99.3% of budgets, worst miss 0.4% under | ~11 runs |
+
+Measured over 60 Mopsi trajectories, M = 1…6: DPn returns exactly `count` points on every
+one of 445 budgets, and SQUISH exactly `buffer_size` on all 138. DOTS has no budget knob, so
+it needs a bisection on its threshold — the count is monotone in it (0 non-monotone steps
+over a 561-step log grid), and the LSSD scale is fine enough that nearly every count is
+reachable. Bisecting costs DOTS its online property, which is worth stating whenever a result
+table mixes it with the streaming algorithms.
+
+The tolerance form of DP was the reason this was awkward: bisecting `tol` hit the target
+exactly on only 79.7% of the same budgets, missing by up to 33% on small ones, because its
+count only moves at distances present in the curve and the radial pre-pass drops points in
+blocks. DPn removes the search entirely.
+
 ## Parameters in the original implementations
 
 No knob was renamed or invented. Each `Params` key is the upstream parameter, with upstream's
@@ -187,7 +222,7 @@ default where it had one:
 
 | Ours | Upstream signature | Type | Upstream default |
 |---|---|---|---|
-| `tol` | `simplify_douglas_peucker(first, last, tol, result)` | `value_type` (double here) | none — required |
+| `count` | `simplify_douglas_peucker_n(first, last, count, result)` | `unsigned` | none — required, and `count >= 2` |
 | `buffer_size` | `SquishBatchSimplifier::simplifyByIndex(x, y, t, out, bufferSize)` | `int` | none — required, and `bufferSize > 4` |
 | `lssd_threshold` | `DotsSimplifier::setParameters(lssdTh, k, maxVkSize)` | `double` | `10000.0` in the constructor |
 | `k` | same call, 2nd argument | `double` | `2.0` |
@@ -197,11 +232,16 @@ So DOTS is the only one of the three that had more than one knob upstream, and i
 the three we expose. `batchDots` passes only `lssdThreshold` and lets `k` and `maxVkSize`
 default, which is what our `run()` does too.
 
-Two upstream knobs are deliberately not carried over. psimpl has a second entry point,
-`simplify_douglas_peucker_n(first, last, count, result)`, which takes a **point count**
-instead of a tolerance — the min-# form of the same algorithm; we ported the `tol` form only.
+Two upstream knobs are deliberately not carried over. psimpl's other entry point,
+`simplify_douglas_peucker(first, last, tol, result)`, takes a **tolerance** instead of a
+count; we port the count form only, so `tol` and the radial pre-pass it drives are both gone.
 And DOTS' cascade mode adds `thStart` and `thStep` (`batchDotsCascadeByIndexOptions`), which
 went with the rest of cascade mode.
+
+Unlike SQUISH, psimpl does not *reject* a budget it cannot meet: `count < 2`, or a curve no
+longer than `count`, copies the input through unchanged. That is upstream's behaviour and it
+is kept, so a driver sweeping `N / 2^M` past the end of a short trajectory gets the
+trajectory back rather than an exception.
 
 ### What DOTS' two secondary knobs actually do
 
@@ -252,9 +292,9 @@ Helper::normalizeData(y, true);
 Helper::normalizeData(t, false);                                    // rebase on the first value
 ```
 
-So upstream's inputs are mean-centred Mercator **metres** and seconds from zero. A `tol` of
-10.0 is ten metres, and DOTS' guards — first `|t|` under a year in seconds, `|x|`, `|y|`
-under 2 000 km — are sized for exactly that.
+So upstream's inputs are mean-centred Mercator **metres** and seconds from zero. An LSSD
+threshold of `10000.0` is ten thousand metre²·points, and DOTS' guards — first `|t|` under a
+year in seconds, `|x|`, `|y|` under 2 000 km — are sized for exactly that.
 
 **We do none of that projection**, because `trajio` copies coordinates verbatim by design: a
 Mopsi document is degrees, NGSIM is State Plane feet, MOT is pixels. Nothing in this port
@@ -263,10 +303,10 @@ past those guards, and even that differs slightly from upstream — upstream cen
 `y` on their **mean** and rebases `t` on its **first value**; we translate all three to the
 first point. Both are translations and LSSD is invariant under either.
 
-The consequence: **upstream's default parameter values are meaningless on our data**, and a
-tolerance in degrees is not a tolerance in metres. Either project the coordinates before
-calling these, or sweep the parameter against the data — which is what the next section
-measures.
+The consequence: **upstream's default parameter values are meaningless on our data**, since a
+squared distance in degrees is not one in metres. Either project the coordinates before
+calling DOTS, or sweep its threshold against the data — which is what the next section
+measures. The two budget knobs are immune: a vertex count means the same thing in any unit.
 
 ## Parameter scales here
 
@@ -274,16 +314,19 @@ Measured on `mopsi-000003` (130 points, raw lon/lat degrees):
 
 | | meaning | useful range on degrees |
 |---|---|---|
-| `tol` | perpendicular distance, in coordinate units | `1e-4` → 22 points, `1e-3` → 4 |
+| `count` | a vertex budget, unit-free | exact: 10 → 10, 50 → 50 |
 | `buffer_size` | a point budget, not an error bound | exact: 10 → 10, 50 → 50 |
 | `lssd_threshold` | **squared** SED summed over points, in units²·points | `1e-12` → 126, `1e-9` → 84, `1e-7` → 21 |
 
-`lssd_threshold` is quadratic in the coordinate unit, so it moves fastest of the three when
-units change: upstream's default of `10000.0` in metres corresponds to nothing usable in
-degrees, where `1e-3` already collapses a trajectory to its endpoints.
+Only `lssd_threshold` is in the coordinate unit at all, now that DP takes a budget — and it is
+quadratic in that unit, so it moves fastest of anything here when units change: upstream's
+default of `10000.0` in metres corresponds to nothing usable in degrees, where `1e-3` already
+collapses a trajectory to its endpoints.
 
-SQUISH cannot be given an error bound at all — upstream implements SQUISH, not SQUISH-E, so
-there is no `mu`. Its knob is a point budget and nothing else.
+Neither budget is an error bound. SQUISH cannot be given one — upstream implements SQUISH,
+not SQUISH-E, so there is no `mu` — and DPn's `count` is a size, not a distance. DOTS is the
+only one of the three that bounds anything, and it bounds LSSD, not Fréchet. Every error
+number in a results table is therefore measured, never assumed.
 
 ## Verified against the originals
 
@@ -298,13 +341,28 @@ repeated points), sweeping 8 tolerances, 7 buffer sizes and 8 LSSD thresholds, p
 through its online interface at every combination of `k` in {1.05, 2, 8} and `max_vk_size` in
 {1, 2, 5, 1e6}, comparing not just the indices but *when* each was emitted, and psimpl in 3D.
 
-**3807 comparisons, one mismatch**, and it is the documented one: on a unit staircase at
-`tol = 0.5` every candidate point is exactly equidistant from the chord, so the key is
-decided purely by how the projection fraction rounds. Re-running our DP with psimpl's `float`
-fraction reproduces psimpl exactly, on that case and everywhere else — the port is otherwise
-identical, and only inputs with exact distance ties can diverge.
+**3807 comparisons, one mismatch**, on a unit staircase where every candidate point is
+exactly equidistant from the chord, so the key is decided purely by how the projection
+fraction rounds.
 
-Three checks go past matching upstream, to what the papers claim:
+DPn was verified in the same way when it replaced the tolerance form, against psimpl's
+`simplify_douglas_peucker_n`: 60 Mopsi trajectories at ten fixed counts and at every
+`N / 2^M`, plus a straight line, a curve of repeated points, a zigzag, a unit staircase, a
+40-point wander and a 3D helix — **938 comparisons, 28 mismatches, all 28 explained by the
+`float` projection fraction alone.** Re-running the same algorithm with psimpl's `float`
+fraction reproduces psimpl exactly on every one of the 938, so the port is otherwise
+identical and only inputs with distance ties can diverge.
+
+DPn meets more of those ties than the tolerance form did, which is why 28 and not 1: it keeps
+promoting keys until the budget is met, so it has to rank points whose distances are
+numerically indistinguishable — a straight line, a staircase, a stretch of repeated GPS
+fixes. 27 of the 28 are exactly those synthetic degenerate curves; one is real
+(`mopsi-000032` at `count = 100`, a 123-point trajectory being asked for 100 of its points).
+Note also that ties are broken by `std::priority_queue` heap order, which upstream leaves to
+its standard library and we leave to ours — identical here because both are built with the
+same libstdc++, and not something to rely on across compilers.
+
+Two checks go past matching upstream, to what the papers claim:
 
 - `getLSSD`'s eight-prefix-sum closed form agrees with the brute-force sum of squared
   synchronous distances to 4e-9 relative over 200 random curves, so the O(1) form really is
@@ -313,16 +371,16 @@ Three checks go past matching upstream, to what the papers claim:
   trajectories — and the output is **within 1.11× the true minimum** point count achievable
   under the same constraint, computed exhaustively over all legal shortcuts. That is the
   paper's near-optimality claim, measured.
-- DP's error is the 1.88 `tol` above, not `tol`. It is the one place where fidelity to the
-  reference costs a guarantee.
+- DPn delivers its budget exactly, on all 445 budgets it could bind on.
 
 ## Tests
 
 `tests/test_simplify.cpp`, 19 cases. Every algorithm is checked against the shared contract —
 endpoints kept, output a strictly increasing subsequence of valid indices, monotone in its
-parameter — plus what is specific to each: DP flattening a straight line to two points and
-running in 3D, SQUISH respecting its budget and rejecting `buffer_size <= 4`, DOTS accepting
-epoch-ms through `indices` while `feed` still rejects it, and both SED algorithms refusing to
+parameter — plus what is specific to each: DPn returning exactly `count` points, nesting its
+simplifications as the budget grows, copying a curve through when the budget cannot bind, and
+running in 3D; SQUISH respecting its budget and rejecting `buffer_size <= 4`; DOTS accepting
+epoch-ms through `indices` while `feed` still rejects it; and both SED algorithms refusing to
 run without a clock.
 
 Two cases cover the interface itself: a toy `Midpoints` algorithm that emits vertices found

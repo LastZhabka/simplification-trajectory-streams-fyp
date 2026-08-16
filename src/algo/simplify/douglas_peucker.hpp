@@ -1,18 +1,24 @@
-// Douglas-Peucker, ported from psimpl (psimpl.sourceforge.net), MIT.
+// Douglas-Peucker, the point-count variant (DPn), ported from psimpl
+// (psimpl.sourceforge.net) v7, MPL 1.1: `simplify_douglas_peucker_n` and
+// `DPHelper::ApproximateN`.
 //
-// Faithful to psimpl's `simplify_douglas_peucker`, including the part people forget: it runs
-// a radial-distance pass at the same tolerance first, and applies DP to that reduced
-// polyline. Distances are point-to-*segment* (psimpl::math::segment_distance2), not
-// point-to-line, and the recursion is an explicit stack, as upstream.
+// The knob is a vertex budget, not a tolerance. Instead of splitting one sub-polyline at a
+// time until every point is within tol, all sub-polylines sit in a max-heap keyed by the
+// squared distance of their furthest point, and the globally furthest point is promoted to a
+// key at each step -- until `count` keys exist. The result is exactly `count` points.
+//
+// Upstream's tolerance form is *not* ported: with no tolerance there is no radial-distance
+// pre-pass either, and DPn does not use one. Distances stay point-to-*segment*
+// (psimpl::math::segment_distance2), as upstream.
 //
 // psimpl works on a flat iterator range of interleaved coordinates and writes points; this
-// works on Curve<D> and returns indices into the original curve, so the radial pass has to
-// carry the surviving positions rather than copy coordinates.
+// works on Curve<D> and returns indices into the curve, so upstream's coordinate indices
+// (`index / DIM`) are point indices here.
 #pragma once
 
 #include <cstddef>
+#include <queue>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "simplify/simplifier.hpp"
@@ -22,14 +28,17 @@ namespace ssk::simplify {
 template <std::size_t D>
 class DouglasPeucker : public SubsetSimplifier<D> {
  public:
-  explicit DouglasPeucker(const Params& params) : tol_(params.get("tol")) {}
+  explicit DouglasPeucker(const Params& params)
+      : count_(static_cast<int>(params.get("count"))) {}
 
-  [[nodiscard]] std::string name() const override { return "douglas-peucker"; }
+  [[nodiscard]] std::string name() const override { return "douglas-peucker-n"; }
 
  protected:
   [[nodiscard]] std::vector<std::size_t> run_indices(const Curve<D>& curve,
                                                      const Context&) const override {
-    if (tol_ == 0.0) {
+    // Upstream copies the input through when it cannot deliver the budget, rather than
+    // failing.
+    if (count_ < 2 || curve.size() <= static_cast<std::size_t>(count_)) {
       std::vector<std::size_t> all(curve.size());
       for (std::size_t i = 0; i < all.size(); ++i) {
         all[i] = i;
@@ -37,65 +46,64 @@ class DouglasPeucker : public SubsetSimplifier<D> {
       return all;
     }
 
-    const std::vector<std::size_t> reduced = radial_distance(curve);
-    const std::size_t n = reduced.size();
+    const std::size_t n = curve.size();
     std::vector<bool> keys(n, false);
     keys.front() = true;
     keys.back() = true;
 
-    const double tol2 = tol_ * tol_;
-    std::vector<std::pair<std::size_t, std::size_t>> stack{{0, n - 1}};
-    while (!stack.empty()) {
-      const auto [first, last] = stack.back();
-      stack.pop_back();
-      const auto [index, dist2] = find_key(curve, reduced, first, last);
-      if (index != 0 && tol2 < dist2) {
-        keys[index] = true;
-        stack.emplace_back(index, last);
-        stack.emplace_back(first, index);
+    if (count_ > 2) {
+      std::priority_queue<SubPoly> queue;
+      queue.push(with_key(curve, {0, n - 1}));
+
+      int key_count = 2;
+      while (!queue.empty()) {
+        const SubPoly poly = queue.top();
+        queue.pop();
+        keys[poly.key_index] = true;
+        if (++key_count == count_) {
+          break;
+        }
+        const SubPoly left = with_key(curve, {poly.first, poly.key_index});
+        if (left.key_index != 0) {
+          queue.push(left);
+        }
+        const SubPoly right = with_key(curve, {poly.key_index, poly.last});
+        if (right.key_index != 0) {
+          queue.push(right);
+        }
       }
     }
 
     std::vector<std::size_t> out;
     for (std::size_t i = 0; i < n; ++i) {
       if (keys[i]) {
-        out.push_back(reduced[i]);
+        out.push_back(i);
       }
     }
     return out;
   }
 
  private:
-  // psimpl runs this at the same tolerance before DP proper.
-  [[nodiscard]] std::vector<std::size_t> radial_distance(const Curve<D>& curve) const {
-    const double tol2 = tol_ * tol_;
-    std::vector<std::size_t> out{0};
-    std::size_t current = 0;
-    for (std::size_t i = 1; i + 1 < curve.size(); ++i) {
-      if (point_distance2(curve[current], curve[i]) < tol2) {
-        continue;
-      }
-      current = i;
-      out.push_back(i);
-    }
-    out.push_back(curve.size() - 1);
-    return out;
-  }
+  struct SubPoly {
+    std::size_t first = 0;
+    std::size_t last = 0;
+    std::size_t key_index = 0;  // 0 means "no key found"
+    double key_dist2 = 0.0;
+
+    bool operator<(const SubPoly& other) const { return key_dist2 < other.key_dist2; }
+  };
 
   // Furthest point from the segment, over the open range; index 0 means "none found".
-  [[nodiscard]] static std::pair<std::size_t, double> find_key(
-      const Curve<D>& curve, const std::vector<std::size_t>& reduced, std::size_t first,
-      std::size_t last) {
-    std::pair<std::size_t, double> key{0, 0.0};
-    for (std::size_t i = first + 1; i < last; ++i) {
-      const double d2 =
-          segment_distance2(curve[reduced[first]], curve[reduced[last]], curve[reduced[i]]);
-      if (d2 < key.second) {
+  [[nodiscard]] static SubPoly with_key(const Curve<D>& curve, SubPoly poly) {
+    for (std::size_t i = poly.first + 1; i < poly.last; ++i) {
+      const double d2 = segment_distance2(curve[poly.first], curve[poly.last], curve[i]);
+      if (d2 < poly.key_dist2) {
         continue;
       }
-      key = {i, d2};
+      poly.key_index = i;
+      poly.key_dist2 = d2;
     }
-    return key;
+    return poly;
   }
 
   [[nodiscard]] static double point_distance2(const Point<D>& a, const Point<D>& b) {
@@ -130,7 +138,7 @@ class DouglasPeucker : public SubsetSimplifier<D> {
     return point_distance2(p, proj);
   }
 
-  double tol_;
+  int count_;
 };
 
 }  // namespace ssk::simplify

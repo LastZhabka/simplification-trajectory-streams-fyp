@@ -270,10 +270,15 @@ synthesised timestamps are approximate for some of them.
 
 ### Export size
 
-Measured on the CSV export this replaced. The point and file counts are unchanged by the
-move to JSON; the byte sizes are not — one point per line as `[x, y],` runs roughly 1.3 to
-1.4 times the width of `x,y`, and the parallel `t` array adds roughly 16 bytes per point on
-top, so budget about 2 GB in total rather than 972 MB.
+Points and files are counted on the JSON export; the byte column is the CSV export this
+replaced, kept because measuring the JSON one costs a full re-export of every dataset.
+
+Measured on 600 Mopsi documents (778 766 points): **42.8 bytes per point, 2.17× the CSV**.
+That is one point per line as `[x, y],` at roughly 1.35× the width of `x,y`, plus about 16
+bytes per point for the parallel `t` array — so the byte column below scales to **about
+2.1 GB in total** rather than 972 MB. The ratio is dataset-dependent, since it is driven by
+how wide the coordinates print: Mopsi degrees carry 7 significant digits, NGSIM State Plane
+feet more, MOT pixel centres fewer.
 
 | Directory | Files | Points | Size (as CSV) |
 |---|---:|---:|---:|
@@ -299,10 +304,17 @@ something different in each:
 | NGSIM | feet (State Plane) | 3 |
 | MOT | pixels | 5 |
 
-Verified against `simplify`, all three within the Fréchet bound:
+These `delta` values come from the earlier prototype's `simplify` CLI, which is **not in this
+repository** — it went with the algorithm tracks and the Fréchet computer. Nothing here can
+reproduce them yet, so treat them as a starting scale to re-measure, not as a current result:
 
 | Input | delta | Result | Fréchet |
 |---|---|---|---|
 | `mopsi-000002.json` | 0.0005 | 103 to 2 points | 0.000595 within 0.0006 |
 | `ngsim-000001.json` (us-101) | 3 | 990 to 12 points | 3.572 within 3.6 |
 | `mot-000001.json` (DanceTrack) | 5 | 697 to 62 points | 5.953 within 6 |
+
+The baselines in `src/algo/simplify/` take no `delta` at all — two of them take a vertex
+budget and the third a squared-SED threshold. See [comparison.md](comparison.md) for how the
+experiments bridge that, and [simplification.md](simplification.md) for the parameter scales
+that *are* measured on this data.

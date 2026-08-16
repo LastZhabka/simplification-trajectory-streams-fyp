@@ -28,6 +28,7 @@ data/downloads/*
 !data/downloads/README.md
 data/trajectories/*
 !data/trajectories/.gitkeep
+data/simplified-trajectories/
 data/synthetic/
 data/renders/
 

@@ -1,0 +1,17 @@
+add_library(ssk_sweep sweep.cpp)
+target_link_libraries(ssk_sweep PUBLIC ssk)
+target_include_directories(ssk_sweep PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(ssk_simplify simplify_sweep.cpp)
+target_link_libraries(ssk_simplify PRIVATE ssk_sweep)
+
+foreach(target ssk_sweep ssk_simplify)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE /W4)
+  else()
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion)
+  endif()
+  if(SSK_WARNINGS_AS_ERRORS)
+    target_compile_options(${target} PRIVATE $<IF:$<BOOL:${MSVC}>,/WX,-Werror>)
+  endif()
+endforeach()
