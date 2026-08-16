@@ -29,6 +29,7 @@ data/downloads/*
 data/trajectories/*
 !data/trajectories/.gitkeep
 data/simplified-trajectories/
+data/frechet-distances/
 data/synthetic/
 data/renders/
 

@@ -1,9 +1,17 @@
-# Running the simplification sweep
+# Running the pipelines
 
-`src/pipelines/` holds the experiment drivers. Today there is one, `ssk_simplify`, which
-takes a dataset directory of trajectory documents and writes every baseline's simplification
-of every trajectory at every compression rate. What the experiment is *for* is
-[comparison.md](comparison.md); this is how to run it and what it costs.
+`src/pipelines/` holds the experiment drivers, one directory each, and each keeps its logic in
+a library beside a thin `main` so the tests can drive it without running the binary:
+
+| Directory | Binary | What |
+|---|---|---|
+| `simplify-sweep/` | `ssk_simplify` | every baseline's simplification of every trajectory, at every compression rate |
+| `frechet-distance/` | `ssk_frechet` | how far each of those simplifications is from the trajectory it came from |
+
+They run in that order and the second mirrors the first's output tree one for one. What the
+experiment is *for* is [comparison.md](comparison.md); this is how to run it and what it costs.
+
+## The sweep
 
 ```sh
 ./build/src/pipelines/ssk_simplify --in data/trajectories/mopsi \
@@ -144,6 +152,56 @@ remaining explanation has to be that the search visits thresholds far more expen
 sampled, or that some evaluation does not terminate in the time expected. **This is not
 diagnosed.** Anyone picking it up should trace every evaluation — threshold, resulting size
 and elapsed time — rather than trusting the arithmetic above.
+
+## Measuring the error
+
+```sh
+./build/src/pipelines/frechet-distance/ssk_frechet --in data/trajectories/mopsi \
+    --simplified data/simplified-trajectories --out data/frechet-distances
+```
+
+Writes `data/frechet-distances/<algorithm>/<dataset>/m<rate>/<name>.json`, **mirroring the
+simplified tree exactly**, one document per simplification:
+
+```json
+{ "algorithm": "dots", "dataset": "mopsi", "dim": 2, "mode": "budget",
+  "name": "mopsi/routes/1/1216464589688",
+  "frechet": { "distance": 0.00019507700706403058,
+               "tolerance": 2.537329637630661e-11, "computer": "dv-gis-cup-2017" },
+  "params": { "lssd_threshold": 1.6915935776057353e-07 },
+  "stats": { "input_size": 130, "output_size": 17, "compression": 7.647, "m": 3,
+             "rate": 8, "target": 17, "algorithm_runs": 4 },
+  "source": "mopsi/mopsi-000003.json",
+  "simplified": "dots/mopsi/m3/mopsi-000003.json" }
+```
+
+`params` and `stats` are carried over from the simplification, so a results table needs only
+this document — it does not have to open two more to learn which threshold produced the
+number. The geometry is not repeated; `simplified` and `source` name where it lives.
+
+**The dataset is part of the path**, and it has to be: trajectory files are named per source,
+not globally, so `ngsim-000001.json` exists in all four NGSIM sites and `mot-000001.json` in
+all three MOT sets. Flattening the dataset out of the path would silently overwrite about
+19 000 trajectories' results.
+
+**The tolerance is relative** — `--tol`, default `1e-9` — taken against the input's
+bounding-box diagonal. It has to be, because the coordinate unit differs by six orders of
+magnitude across the corpus: one absolute tolerance is either meaningless on degrees or
+ruinous on State Plane feet. The absolute value used is recorded in each document.
+
+`--shard I --shards N` works exactly as in the sweep, and matters for the same reason: the
+free-space diagram is `n × m` cells, so cost is quadratic in trajectory length at a fixed rate
+and the long GeoLife tracks dominate again.
+
+### Reading the numbers
+
+**Error is not monotone in the vertex budget.** Measured over 40 Mopsi trajectories, 22 of 120
+(algorithm, trajectory) series had a *deeper* rate score *lower* than the one above it — for
+Douglas–Peucker by as much as 27%, far above the tolerance. That is a property of the measure,
+not a defect: a kept vertex forces the matching to pass through it, so a 3-point simplification
+can be further from the input than the 2-point chord that skips it. A table of mean error
+against rate is well behaved; individual series are not, and nothing downstream should assume
+they are.
 
 ## Checking a run
 

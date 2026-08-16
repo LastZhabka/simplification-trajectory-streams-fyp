@@ -14,3 +14,4 @@ function(ssk_pipeline_warnings)
 endfunction()
 
 add_subdirectory(simplify-sweep)
+add_subdirectory(frechet-distance)
