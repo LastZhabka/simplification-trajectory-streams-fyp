@@ -23,7 +23,7 @@ FYP. The algorithm is being rewritten; what exists now is the tooling around it.
 | `tests/` | C++ unit tests. | Own ~60-line harness — GoogleTest via FetchContent would break an offline configure. |
 | `src/algo/frechet/` | Continuous Frechet distance, `Frechet<D>`. | Ported from the GIS Cup 2017 winner (MIT, standard library only), cross-verified against two independent implementations. The decision `within()` is the primitive and is exact; `distance()` bisects it. |
 | `src/algo/simplify/` | `Simplifier<D>` + Douglas-Peucker, SQUISH, DOTS. | Ports of the reference implementations, not reinventions — match upstream behaviour and record any deviation in `docs/simplification.md`. Dimension is a template parameter; `simplify()` returns points because a future algorithm may invent them, and `SubsetSimplifier` adds `indices()` for the ones that don't. |
-| `docs/` | `datasets.md`, `trajio.md`, `simplification.md`, `comparison.md`, `pipeline.md`, `frechet-distance.md` | Measured numbers, not quoted ones. |
+| `docs/` | `datasets.md`, `trajio.md`, `simplification.md`, `comparison.md`, `pipeline.md`, `frechet-distance.md`, `references.md` | Measured numbers, not quoted ones. |
 | `src/pipelines/` | Experiment drivers. C++, `ssk_simplify`. | The algorithms are C++, so the driver is too — a Python one would spawn a process per trajectory. Entry points live with their piece under `src/`, as `viz` and `trajio` already do. Sweep logic sits in `sweep.hpp/cpp` so the tests can drive it without running `main`. |
 
 **One format everywhere:** `{"dim": 2, "name": "...", "t_unit": "unix_ms", "t": [...],
