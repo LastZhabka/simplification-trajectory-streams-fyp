@@ -201,8 +201,9 @@ writing `data/frechet-distances/<algorithm>/<dataset>/m<rate>/<name>.json` — t
 one document per measurement, carrying the distance alongside the `params` and `stats` that
 produced it, so a results table needs only that document.
 
-Budget: about 4.3× the input on disk, and roughly 14 documents per trajectory. How to run a
-full corpus sweep, what it costs and how sharding works is
+Budget: about 4.3× the input on disk, and roughly 14 documents per trajectory. Every step from
+a fresh clone to measured distances, with what each costs, is
+[`docs/running.md`](docs/running.md); the pipelines' own flags and layout are
 [`docs/pipeline.md`](docs/pipeline.md).
 
 Why a fixed compression rate rather than a fixed tolerance, and what the resulting numbers
