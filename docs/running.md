@@ -65,8 +65,22 @@ python -m trajio selftest
 
 ## 3. Download the datasets
 
-About **1.96 GB**, and the NGSIM download alone takes ~40 minutes. Full commands, checksums
-and what each dataset contains are in [datasets.md](datasets.md); the short version:
+About **1.96 GB**, and the NGSIM download alone takes ~40 minutes. Full detail on what each
+dataset contains is in [datasets.md](datasets.md).
+
+`curl` will not create the directory it writes into, and only `data/downloads/` itself is in
+the repository, so make the four first. MOT is fetched with `gdown`, which is not in
+`requirements.txt` because nothing in the project imports it — install it for this step alone:
+
+```powershell
+mkdir data\downloads\geolife, data\downloads\mopsi, data\downloads\ngsim, data\downloads\mot
+python -m pip install gdown
+```
+
+```sh
+mkdir -p data/downloads/{geolife,mopsi,ngsim,mot}
+python -m pip install gdown
+```
 
 ```powershell
 curl.exe -L -C - -o data\downloads\geolife\geolife.zip "https://download.microsoft.com/download/F/4/8/F4894AA5-FDBC-481E-9285-D5F8C4C4F039/Geolife%20Trajectories%201.3.zip"
@@ -83,11 +97,48 @@ curl -L --retry 3 -o data/downloads/ngsim/ngsim.csv "https://data.transportation
 `curl.exe` is spelled out on Windows because bare `curl` is a PowerShell alias for
 `Invoke-WebRequest`, which does not take these flags.
 
-MOT comes from the Trajectory Simplify Benchmark's Google Drive copies — see
-[datasets.md](datasets.md), which explains why `motchallenge.net` is not used.
+MOT comes from the Trajectory Simplify Benchmark's Google Drive copies, because
+`motchallenge.net` was unreachable — see [datasets.md](datasets.md). The three archives are
+annotations only, 31 MB rather than about 5 GB, and unpack into `mot/dataset/`:
 
-Unpack the two archives in place. GeoLife and Mopsi are read from their extracted trees;
-NGSIM is one 1.5 GB CSV read as-is.
+```powershell
+python -m gdown 1AjiqAP2AGR_Qk8M0t2y388LvH7EDpZok -O data\downloads\mot\dataset\MOT17.zip
+python -m gdown 1xkpnUaM54dzwBfakVUQMlG5qaQdyVQZc -O data\downloads\mot\dataset\MOT20.zip
+python -m gdown 1mOb1g-ptPX9h9Djlj-xVvn7MdEerqWLX -O data\downloads\mot\dataset\DanceTrack.zip
+```
+
+```sh
+mkdir -p data/downloads/mot/dataset
+python -m gdown 1AjiqAP2AGR_Qk8M0t2y388LvH7EDpZok -O data/downloads/mot/dataset/MOT17.zip
+python -m gdown 1xkpnUaM54dzwBfakVUQMlG5qaQdyVQZc -O data/downloads/mot/dataset/MOT20.zip
+python -m gdown 1mOb1g-ptPX9h9Djlj-xVvn7MdEerqWLX -O data/downloads/mot/dataset/DanceTrack.zip
+```
+
+### Unpack
+
+NGSIM is a single CSV and is read as-is. The other three are archives, and each must extract
+to the directory the export commands in step 4 name — `Geolife Trajectories 1.3` under
+`geolife/`, `routes/` under `mopsi/`, and `MOT17`, `MOT20`, `DanceTrack` under `mot/dataset/`:
+
+```powershell
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[IO.Compression.ZipFile]::ExtractToDirectory("data\downloads\geolife\geolife.zip", "data\downloads\geolife")
+[IO.Compression.ZipFile]::ExtractToDirectory("data\downloads\mopsi\MopsiRoutes2014.zip", "data\downloads\mopsi")
+foreach ($z in "MOT17", "MOT20", "DanceTrack") {
+  [IO.Compression.ZipFile]::ExtractToDirectory("data\downloads\mot\dataset\$z.zip", "data\downloads\mot\dataset")
+}
+```
+
+```sh
+unzip -q data/downloads/geolife/geolife.zip -d data/downloads/geolife
+unzip -q data/downloads/mopsi/MopsiRoutes2014.zip -d data/downloads/mopsi
+for z in MOT17 MOT20 DanceTrack; do
+  unzip -q "data/downloads/mot/dataset/$z.zip" -d data/downloads/mot/dataset
+done
+```
+
+Use `ZipFile` rather than `Expand-Archive` on Windows: GeoLife is 18 670 small files and
+`Expand-Archive` takes minutes on it.
 
 ## 4. Export to the project's format
 
@@ -168,8 +219,28 @@ seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/simplify-sweep/ssk_simplify \
 loop instead. Why the shards stride rather than take blocks, and where that still goes wrong,
 is in [pipeline.md](pipeline.md).
 
-One trajectory is knowingly excluded from DOTS: `geolife-013552` does not finish. Run it with
-`--no-dots` so it still gets Douglas–Peucker and SQUISH results.
+One trajectory is knowingly excluded from DOTS: **`geolife-013552` does not finish**, four
+attempts of 90+ CPU-minutes each. The sharded run above will sit on it forever, so stop that
+worker when the other seven have finished and give the file its own pass with `--no-dots`,
+which produces its Douglas–Peucker and SQUISH results in under a second. The driver takes a
+directory, so put the one file in one — named `geolife`, since the dataset name comes from the
+directory:
+
+```powershell
+mkdir -Force tmp\geolife | Out-Null
+Copy-Item data\trajectories\geolife\geolife-013552.json tmp\geolife\
+.\build\src\pipelines\simplify-sweep\ssk_simplify.exe --in tmp\geolife `
+    --out data\simplified-trajectories --no-dots
+Remove-Item -Recurse tmp
+```
+
+```sh
+mkdir -p tmp/geolife
+cp data/trajectories/geolife/geolife-013552.json tmp/geolife/
+./build/src/pipelines/simplify-sweep/ssk_simplify --in tmp/geolife \
+    --out data/simplified-trajectories --no-dots
+rm -r tmp
+```
 
 ### Bad documents cannot be produced
 
@@ -233,8 +304,10 @@ and run it per dataset in parallel as with the sweep.
 
 ## 6. Measure the error
 
+The eight smaller datasets first — about 25 core-minutes between them:
+
 ```powershell
-foreach ($ds in Get-ChildItem data\trajectories -Directory) {
+foreach ($ds in Get-ChildItem data\trajectories -Directory -Exclude geolife) {
   .\build\src\pipelines\frechet-distance\ssk_frechet.exe --in $ds.FullName `
     --simplified data\simplified-trajectories --out data\frechet-distances
 }
@@ -242,9 +315,27 @@ foreach ($ds in Get-ChildItem data\trajectories -Directory) {
 
 ```sh
 for ds in data/trajectories/*/; do
+  [ "$(basename "$ds")" = geolife ] && continue
   ./build/src/pipelines/frechet-distance/ssk_frechet --in "$ds" \
     --simplified data/simplified-trajectories --out data/frechet-distances
 done
+```
+
+Then GeoLife, which is **77% of all the work** and has to be split within itself — running it
+as one process would take five hours while seven cores idle:
+
+```powershell
+0..7 | ForEach-Object -Parallel {
+  .\build\src\pipelines\frechet-distance\ssk_frechet.exe --in data\trajectories\geolife `
+    --simplified data\simplified-trajectories --out data\frechet-distances `
+    --shard $_ --shards 8
+} -ThrottleLimit 8
+```
+
+```sh
+seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/frechet-distance/ssk_frechet \
+  --in data/trajectories/geolife --simplified data/simplified-trajectories \
+  --out data/frechet-distances --shard {} --shards 8
 ```
 
 **Budget about 6.6 core-hours of compute, but roughly three hours of wall clock**: the job
