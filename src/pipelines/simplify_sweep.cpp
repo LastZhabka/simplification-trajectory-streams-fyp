@@ -7,6 +7,11 @@
 // trajectory per algorithm per rate. Each is a trajectory document -- points and their
 // timestamps -- with the result fields on top, so it reads and draws like any other. SQUISH
 // and DOTS need timestamps, so a document without a clock is simplified by DPn alone.
+//
+// One dataset can be split across processes with `--shard I --shards N`, which is worth
+// doing on GeoLife: DOTS' cost grows faster than linearly, and a handful of 60k-point tracks
+// there dominate the run. Shards stride through the file list rather than take blocks, so
+// those long tracks spread across workers instead of landing on one.
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -27,7 +32,9 @@ struct Options {
   std::string in;
   std::string out = "data/simplified-trajectories";
   int rates = 6;
-  int limit = 0;  // 0 means every trajectory
+  int limit = 0;   // 0 means every trajectory
+  int shard = 0;   // this worker's index, for splitting one dataset across processes
+  int shards = 1;
 };
 
 Options parse_args(int argc, char** argv) {
@@ -43,13 +50,17 @@ Options parse_args(int argc, char** argv) {
       opt.rates = std::atoi(argv[++i]);
     } else if (arg == "--limit" && has_value) {
       opt.limit = std::atoi(argv[++i]);
+    } else if (arg == "--shard" && has_value) {
+      opt.shard = std::atoi(argv[++i]);
+    } else if (arg == "--shards" && has_value) {
+      opt.shards = std::atoi(argv[++i]);
     } else {
-      std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N]\n");
+      std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N] [--shard I --shards N]\n");
       std::exit(2);
     }
   }
   if (opt.in.empty()) {
-    std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N]\n");
+    std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N] [--shard I --shards N]\n");
     std::exit(2);
   }
   return opt;
@@ -66,10 +77,14 @@ void write_document(const fs::path& path, const json::Value& doc) {
 
 int main(int argc, char** argv) {
   const Options opt = parse_args(argc, argv);
-  const std::string dataset = fs::path(opt.in).filename().string();
+  // A trailing separator -- which tab completion adds -- makes filename() empty.
+  const fs::path in_dir = fs::path(opt.in).lexically_normal();
+  const std::string dataset = in_dir.has_filename()
+                                  ? in_dir.filename().string()
+                                  : in_dir.parent_path().filename().string();
 
   std::vector<fs::path> files;
-  for (const auto& entry : fs::directory_iterator(opt.in)) {
+  for (const auto& entry : fs::directory_iterator(in_dir)) {
     if (entry.path().extension() == ".json" && entry.path().filename() != "index.json") {
       files.push_back(entry.path());
     }
@@ -77,6 +92,14 @@ int main(int argc, char** argv) {
   std::sort(files.begin(), files.end());
   if (opt.limit > 0 && files.size() > static_cast<std::size_t>(opt.limit)) {
     files.resize(static_cast<std::size_t>(opt.limit));
+  }
+  if (opt.shards > 1) {
+    std::vector<fs::path> mine;
+    for (std::size_t i = static_cast<std::size_t>(opt.shard); i < files.size();
+         i += static_cast<std::size_t>(opt.shards)) {
+      mine.push_back(files[i]);
+    }
+    files = std::move(mine);
   }
 
   const auto started = std::chrono::steady_clock::now();

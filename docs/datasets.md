@@ -318,3 +318,61 @@ The baselines in `src/algo/simplify/` take no `delta` at all — two of them tak
 budget and the third a squared-SED threshold. See [comparison.md](comparison.md) for how the
 experiments bridge that, and [simplification.md](simplification.md) for the parameter scales
 that *are* measured on this data.
+
+## Trajectory lengths
+
+Counted from the `index.json` of each export, so these describe exactly the documents an
+experiment reads. Lengths are in points.
+
+| Dataset | Trajectories | min | p25 | median | p75 | p90 | p99 | max | mean |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `geolife` | 18 670 | 3 | 201 | 506 | 1 367 | 3 324 | 11 655 | **92 645** | 1 332 |
+| `mopsi` | 6 779 | 10 | 157 | 510 | 1 427 | 3 145 | 7 951 | 31 741 | 1 158 |
+| `ngsim-us-101` | 2 847 | 254 | 990 | 1 553 | 2 355 | 2 768 | 3 352 | 3 719 | 1 687 |
+| `ngsim-i-80` | 3 001 | 204 | 839 | 1 444 | 2 004 | 2 602 | 3 921 | 5 256 | 1 522 |
+| `ngsim-lankershim` | 6 712 | 1 | 71 | 147 | 292 | 647 | 1 241 | 2 183 | 239 |
+| `ngsim-peachtree` | 4 495 | 1 | 50 | 111 | 233 | 535 | 878 | 1 624 | 194 |
+| `mot-mot17` | 2 388 | 1 | 34 | 110 | 357 | 1 050 | 1 050 | 1 050 | 257 |
+| `mot-mot20` | 2 332 | 1 | 227 | 453 | 711 | 934 | 3 315 | 3 315 | 573 |
+| `mot-dancetrack` | 692 | 9 | 578 | 814 | 1 153 | 1 203 | 2 257 | 2 402 | 830 |
+| **corpus** | **47 916** | **1** | — | **420** | — | — | — | **92 645** | **983** |
+
+Three shapes, and they are not interchangeable:
+
+**GPS traces (GeoLife, Mopsi) are heavy-tailed.** A median around 500 points, a 99th
+percentile fifteen to twenty times that, and a maximum two orders of magnitude above the
+median. GeoLife's longest track is 92 645 points; only five exceed 56 000, but they dominate
+anything superlinear.
+
+**NGSIM is bimodal by site.** The freeway sites (`us-101`, `i-80`) are long and remarkably
+uniform — a vehicle crosses the study area and leaves, so p25 to p90 spans only 3×, and the
+minimum is already 204 points. The arterial sites (`lankershim`, `peachtree`) are three to
+eight times shorter, because vehicles enter and leave at intersections.
+
+**MOT is capped by the video.** A track cannot outlive its sequence, so `mot-mot17` is
+truncated hard at 1 050 points — its p90, p99 and max are all 1 050, which is the length of
+its longest sequence, not a property of the motion.
+
+### Why this section exists
+
+**The tail owns the compute.** Summing `n^e` over the corpus, the longest 1% of trajectories
+carry 14% of the points but — at the `n²` that DOTS approaches on long inputs — **59% of the
+work**; the longest 10% carry 88%. Measured on prefixes of GeoLife's longest track, each
+doubling of length costs DOTS 2.1×, then 2.4×, 3.4×, 4.9×. This is why `ssk_simplify` has
+`--shard I --shards N`, and why its shards stride through the file list instead of taking
+contiguous blocks: a block split drops all five GeoLife giants into one worker and that
+worker becomes the run.
+
+**Length decides how many rates a trajectory supports.** A budget of `ceil(N / 2^m)` must
+stay at or above 2 vertices, and at or above 5 for SQUISH, so a short trajectory contributes
+to the shallow rates only. That is why `>= 64` points (all six rates for DPn and DOTS) and
+`>= 320` (all six for SQUISH) matter: 90% and 63% of GeoLife qualifies, but only 61% and 26%
+of `mot-mot17`, and 72% and 20% of `ngsim-peachtree`. **175 trajectories across the corpus —
+1 or 2 points each — support no rate at all and produce no output**, concentrated in
+`ngsim-lankershim` (69), `ngsim-peachtree` (60) and `mot-mot17` (39).
+
+Those two rules predict the size of a full sweep exactly. Summing the qualifying rates per
+trajectory over all three algorithms gives **786 642 result documents**, and every completed
+dataset has matched its prediction to the document: 114 029 for `mopsi`, 99 281 for
+`ngsim-lankershim`, 66 512 for `ngsim-peachtree`, 54 007 for `ngsim-i-80`, 51 244 for
+`ngsim-us-101`, 39 783 for `mot-mot20`, 33 831 for `mot-mot17`, 12 335 for `mot-dancetrack`.

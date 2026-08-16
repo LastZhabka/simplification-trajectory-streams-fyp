@@ -1,0 +1,121 @@
+# Running the simplification sweep
+
+`src/pipelines/` holds the experiment drivers. Today there is one, `ssk_simplify`, which
+takes a dataset directory of trajectory documents and writes every baseline's simplification
+of every trajectory at every compression rate. What the experiment is *for* is
+[comparison.md](comparison.md); this is how to run it and what it costs.
+
+```sh
+./build/src/pipelines/ssk_simplify --in data/trajectories/mopsi \
+                                   --out data/simplified-trajectories
+```
+
+| Flag | Default | What |
+|---|---|---|
+| `--in DIR` | required | a dataset directory of trajectory documents; `index.json` is skipped |
+| `--out DIR` | `data/simplified-trajectories` | root of the result tree |
+| `--rates N` | 6 | deepest compression rate, `1/2^N` |
+| `--limit N` | all | stop after N trajectories |
+| `--shard I --shards N` | 0 / 1 | process only every Nth trajectory, starting at I |
+
+Output lands at `<out>/<algorithm>/<dataset>/m<rate>/<name>.json`, one document per
+trajectory per algorithm per rate. The dataset name comes from the input directory, so
+`--in data/trajectories/mopsi` writes under `mopsi/`.
+
+## Sharding
+
+The driver is single-threaded, and trajectories are independent, so the way to use more than
+one core is to run several processes over disjoint slices of the file list. `--shard I
+--shards N` gives a worker positions `I, I+N, I+2N, …` of the sorted list:
+
+```
+position:  0  1  2  3  4  5  6  7  8  9 10 11
+shard 0:   ●        ●        ●        ●
+shard 1:      ●        ●        ●        ●
+shard 2:         ●        ●        ●        ●
+shard 3:            ●        ●        ●        ●
+```
+
+Every worker derives the same sorted list from the same directory and computes its slice
+arithmetically, so there is **no queue, no lock and no master process**, and since each
+trajectory writes to its own path, two workers can never touch the same file.
+
+**Shards stride rather than take contiguous blocks**, and that is the whole point. Cost is
+not uniform across trajectories — DOTS approaches `n²` in trajectory length, and GeoLife
+ranges from 3 points to 92 645 — and the files are ordered by user and folder, so one person
+who recorded long tracks produces a *run* of consecutive expensive files. A block split hands
+that run to a single worker, which is then still going when the others have finished.
+
+### Subdividing one shard
+
+If one worker falls behind, its slice can be split further without any new flag, because a
+shard of N is exactly a union of shards of any multiple of N. Every position that is
+`7 mod 64` is also `7 mod 8`, and so is every position that is `15, 23, 31, 39, 47, 55` or
+`63 mod 64`, so:
+
+```
+shard 7 of 8  =  shards {7, 15, 23, 31, 39, 47, 55, 63} of 64
+```
+
+Those eight cover shard 7's files completely and disjointly. Running them as eight processes
+subdivides that one shard eight ways using a flag that only knows about the whole dataset.
+
+### Where striding fails
+
+Striding spreads cost *on average*, but it is a fixed arithmetic pattern: two expensive
+trajectories collide whenever the gap between their positions is a multiple of the stride.
+That happened on the first corpus run. `geolife-013552` (64 483 points) sits at position
+13 551 and `geolife-014000` (33 361 points) at 13 999 — **448 apart, which divides by both 8
+and 64** — so they shared a worker in the 8-way split and shared one again in the 64-way
+re-split, and that worker was the critical path both times.
+
+A shared work queue, or dealing longest-first by the point counts already in `index.json`,
+would not have this failure mode. Striding is four lines and needs no coordination; that is
+the trade being made.
+
+## What a corpus run costs
+
+Measured on this machine (MinGW g++ 15.1 `-O2`, 8 cores), one pass over all nine datasets at
+m = 1…6:
+
+| Dataset | Trajectories | Points | Documents | Wall time |
+|---|---:|---:|---:|---:|
+| `geolife` | 18 670 | 24 876 978 | 315 620 | sharded 8 ways |
+| `mopsi` | 6 779 | 7 850 387 | 114 029 | 23 min |
+| `ngsim-us-101` | 2 847 | 4 802 933 | 51 244 | 36 min |
+| `ngsim-i-80` | 3 001 | 4 566 387 | 54 007 | 34 min |
+| `ngsim-lankershim` | 6 712 | 1 607 319 | 99 281 | 22 min |
+| `ngsim-peachtree` | 4 495 | 873 887 | 66 512 | 15 min |
+| `mot-mot17` | 2 388 | 614 103 | 33 831 | 3.7 min |
+| `mot-mot20` | 2 332 | 1 336 920 | 39 783 | 8.4 min |
+| `mot-dancetrack` | 692 | 574 078 | 12 335 | 8.6 min |
+| **total** | **47 916** | **47 102 992** | **786 642** | |
+
+Those timings are single-process per dataset, several datasets at once, so they include disk
+contention. **DOTS is essentially the whole cost** — measured separately, a 6-rate sweep over
+778 766 points takes DPn 0.4 s, SQUISH 2.9 s, and DOTS 76 s once its threshold search is
+included.
+
+**GeoLife needs sharding, the others do not.** Its median trajectory is 506 points but five
+exceed 56 000, and at DOTS' scaling those five dominate the dataset: run as one process it
+managed roughly one trajectory every four minutes once it reached them. See the length
+distributions in [datasets.md](datasets.md) for why this is a GeoLife problem specifically.
+
+The document count is predictable rather than emergent: a rate is only produced when its
+budget stays at or above 2 vertices, and 5 for SQUISH, so summing the qualifying rates over
+all three algorithms gives 786 642 exactly — which every dataset has matched to the document.
+
+## Checking a run
+
+Result documents are trajectory documents, so they can be read back with
+`io::read_trajectory` and drawn with `viz/plot.py` directly:
+
+```sh
+python src/viz/plot.py \
+  data/simplified-trajectories/dots/mopsi/m3/mopsi-000003.json -o data/renders/check.png
+```
+
+Beyond that, a result is verifiable against its input, and `source` names it: the points must
+be a subsequence of the input matched on point *and* timestamp — matching on coordinates
+alone gives false failures wherever a GPS trace repeats a fix — the endpoints must survive,
+`stats.output_size` must not exceed `stats.target`, and for DPn it must equal it.

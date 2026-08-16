@@ -190,9 +190,12 @@ timestamps, so `io/trajectory` reads it as a curve and `viz/plot.py` draws it wi
 rehydration step. On top of that it carries `algorithm`, `mode`, the `params` that produced
 it — `count`, `buffer_size`, or the threshold DOTS' search resolved to — `stats`, and
 `source` naming the input it came from. `--rates` changes the deepest rate, `--limit` stops
-after N trajectories.
+after N trajectories, and `--shard I --shards N` splits one dataset across processes — worth
+it on GeoLife, where a handful of 60k-point tracks dominate the run.
 
-Budget: about 4.3× the input on disk, and roughly 14 documents per trajectory.
+Budget: about 4.3× the input on disk, and roughly 14 documents per trajectory. How to run a
+full corpus sweep, what it costs and how sharding works is
+[`docs/pipeline.md`](docs/pipeline.md).
 
 Why a fixed compression rate rather than a fixed tolerance, and what the resulting numbers
 can and cannot claim, is [`docs/comparison.md`](docs/comparison.md).
