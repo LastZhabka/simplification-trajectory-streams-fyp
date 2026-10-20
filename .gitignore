@@ -30,6 +30,7 @@ data/trajectories/*
 !data/trajectories/.gitkeep
 data/simplified-trajectories/
 data/frechet-distances/
+data/error-matched/
 data/synthetic/
 data/renders/
 
@@ -37,6 +38,7 @@ data/renders/
 __pycache__/
 *.py[cod]
 .venv/
+.venv313/
 venv/
 .mypy_cache/
 .pytest_cache/

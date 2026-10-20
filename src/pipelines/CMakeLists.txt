@@ -15,4 +15,5 @@ endfunction()
 
 add_subdirectory(simplify-sweep)
 add_subdirectory(frechet-distance)
+add_subdirectory(error-match)
 add_subdirectory(audit)
