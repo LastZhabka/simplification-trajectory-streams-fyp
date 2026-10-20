@@ -20,6 +20,7 @@ option(SSK_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 add_library(ssk
   src/algo/io/json.cpp
   src/algo/io/trajectory.cpp
+  src/algo/simplify/convex_shadow.cpp
   src/algo/simplify/dots.cpp
   src/algo/simplify/squish.cpp
 )
