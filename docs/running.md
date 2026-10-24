@@ -1,10 +1,11 @@
 # From zero to Fréchet distances
 
-Every step from a fresh clone to a measured error for every simplification. **Each step gives
-the PowerShell and the POSIX shell form**, since the project is developed on Windows but
-nothing in it is Windows-only — see *Portability* at the end for what actually differs.
+Every step from a fresh clone to a measured error for every simplification, and to ours run at
+each of those errors. **Each step gives the PowerShell and the POSIX shell form**, since the
+project is developed on Windows but nothing in it is Windows-only — see *Portability* at the
+end for what actually differs.
 
-Run everything from the repository root. Each step says roughly what it costs, because two of
+Run everything from the repository root. Each step says roughly what it costs, because three of
 them are measured in hours.
 
 ---
@@ -359,7 +360,98 @@ The result is one document per simplification at
 beside the `params` and `stats` that produced it. That document is self-contained: a results
 table does not need to open the simplification or the input to know what it is looking at.
 
-## 7. Read the results
+## 7. Run ours at each baseline's error
+
+`ssk_match` runs ours (`convex-shadow`) once per baseline document from step 6, at
+`δ = d*/(1+ε)` where `d*` is that baseline's measured error. Ours is then guaranteed no worse
+than the baseline, and the question is how many vertices it needs. It measures ours and checks
+the bound exactly in the same pass. What it computes and why is in [algorithm.md](algorithm.md);
+this is how to run it.
+
+It needs the build and step 6's `data/frechet-distances/`; a trajectory with no baseline
+document is skipped. **`--eps` is required**, and each value is its own run under its own root.
+One dataset at all three ε, 8 processes at a time:
+
+```powershell
+$ds = "mot-dancetrack"
+New-Item -ItemType Directory -Force data\error-matched | Out-Null
+foreach ($eps in "0.5", "0.3", "0.1") {
+  $procs = 0..7 | ForEach-Object {
+    Start-Process .\build\src\pipelines\error-match\ssk_match.exe -NoNewWindow -PassThru `
+      -ArgumentList "--in data\trajectories\$ds --eps $eps --shard $_ --shards 8 --skip-existing" `
+      -RedirectStandardOutput "data\error-matched\$ds-eps$eps-shard$_.log"
+  }
+  $procs | Wait-Process
+}
+Get-Content data\error-matched\$ds-eps*-shard*.log
+```
+
+```sh
+ds=mot-dancetrack
+mkdir -p data/error-matched
+for eps in 0.5 0.3 0.1; do
+  seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/error-match/ssk_match \
+    --in data/trajectories/$ds --eps $eps --shard {} --shards 8 --skip-existing
+done 2>&1 | tee -a data/error-matched/$ds.log
+```
+
+`Start-Process` works on PowerShell 5.1 and 7. Prefer it to `Start-Job` here: each job is a whole
+PowerShell host of about 70 MB, while `ssk_match` itself peaks at 7 MB.
+
+For the corpus, set the dataset to each directory of `data/trajectories` in turn, but skip
+`mopsi-sample`: it is a subset of `mopsi` and would be counted twice.
+
+Each shard ends with:
+
+```
+mot-dancetrack eps=0.5: 87 trajectories -> 1553 matches over 1337209 points in 1156.1 s
+  out: data/error-matched/eps0.5/{<algorithm>,summary}/mot-dancetrack/
+```
+
+On a resume it adds `N already done, skipped`. A run that breaks the bound adds
+`K over (1+eps)*delta -- a broken guarantee, look at these`. That line has never appeared, and
+if it does, it is a bug.
+
+**Cost, measured on `mot-dancetrack`** (692 trajectories, 12 335 baseline documents; 8
+processes on 8 cores):
+
+| ε | wall clock | core-hours |
+|---|---:|---:|
+| 0.5 | 19.6 min | 2.5 |
+| 0.3 | 30.4 min | 3.9 |
+| 0.1 | 143 min | ≈ 19.5 |
+
+That is about **1.3× the estimate in [algorithm.md](algorithm.md) §7**. Scale its corpus figures
+(189 / 300 / 1 356 core-hours) by about 1.3 before planning a corpus run, and do ε = 0.5 and 0.3
+first.
+
+On disk, each ε of `mot-dancetrack` is 13 027 files and 55 MB: one result per baseline
+document plus one summary per trajectory.
+
+**Resuming.** The summary is written last, so a trajectory that has one is finished. Rerunning
+the same command (`--skip-existing` is already in it) picks up where it stopped, losing at most
+the trajectory each shard was on. The shard count may change between runs.
+
+**Check before reading the results:**
+
+- **Summaries:** each ε has one per trajectory in the dataset.
+- **Logs:** no `over (1+eps)*delta` line.
+- **Coverage:** in step 8's coverage table, each `ours eps=E` cell is the sum of the three
+  baselines in its row.
+
+```powershell
+(Get-ChildItem data\error-matched\eps0.5\summary\mot-dancetrack).Count
+Select-String -Path data\error-matched\*-shard*.log -Pattern "over \(1\+eps\)"
+```
+
+```sh
+ls data/error-matched/eps0.5/summary/mot-dancetrack | wc -l
+grep "over (1+eps)" data/error-matched/*.log
+```
+
+The first prints the trajectory count (692 for `mot-dancetrack`); the second prints nothing.
+
+## 8. Read the results
 
 Everything needed for a table is in the `frechet-distances` tree. A rate-by-algorithm summary
 is a short script over it, and this one is the same on both platforms:
@@ -380,6 +472,43 @@ Two things to know before drawing conclusions from it, both in
 against an objective **none of them optimises**, and **error is not monotone in the vertex
 budget** — a kept vertex forces the matching through it, so a finer simplification can score
 worse than a coarser one. Means behave; individual series do not.
+
+### Ours against the baselines
+
+`scripts/comparison_stats.py` reads only step 7's summaries and uses only the standard library,
+so it needs no venv and runs in seconds per dataset:
+
+```powershell
+python scripts\comparison_stats.py --matched data\error-matched | Out-File -Encoding utf8 data\error-matched\comparison.md
+```
+
+```sh
+python scripts/comparison_stats.py --matched data/error-matched > data/error-matched/comparison.md
+```
+
+**It prints Markdown, per dataset:**
+
+- coverage;
+- each baseline's median error at a fixed rate;
+- per ε, ours at each baseline's error: the size ratio, the error ratio and dominance in both
+  directions.
+
+It then prints the matched table pooled over datasets, and **Theorem 3, checked**. Everything,
+plus the rate–distortion curves, also goes as JSON to `data/error-matched/comparison.json`
+(change it with `--out`). Every column is described in [algorithm.md](algorithm.md) §6.
+
+**Read the Theorem 3 table first.** Its `over (1+eps)delta` and `over 2kappa-2` columns must be
+0, and anything else is a bug.
+
+**Then read "smaller", not "ours dominates".** Both errors are bisection tops, so at ε = 0.1
+and 0.5, where ours' error reaches the baseline's exactly, the measured comparison is a coin
+toss: on `mot-dancetrack`, "ours dominates" ranges from 31% to 98%. Every pair has already
+passed the exact check `d_F(ours) ≤ d*`, so "smaller" is the dominance figure. At ε = 0.3 the
+grid's farthest corner is at 0.9959·(1+ε)δ, so ours' error stays below the baseline's and the
+two columns agree.
+
+The `mot-dancetrack` results, bucketed by size ratio, are in
+`archive/[2026-10-21] Meeting Material - Benchmark data.md`.
 
 ---
 
@@ -403,6 +532,18 @@ python src/viz/plot.py data/simplified-trajectories/dots/mopsi/m3/mopsi-000003.j
 Because a simplification is a trajectory document in its own right, it draws directly with no
 conversion step. 3D documents render as a 3D line plot plus the `xy`, `xz` and `yz`
 projections, since one 3D view hides most of what a simplification did.
+
+Ours' results from step 7 are trajectory documents too. They carry their own `frechet` block
+with `bound` and `within_bound`, so the panel shows whether the guarantee held:
+
+```powershell
+python src\viz\plot.py data\error-matched\eps0.5\dots\mot-dancetrack\m3\mot-000001.json -o data\renders\ours.png
+```
+
+```sh
+python src/viz/plot.py data/error-matched/eps0.5/dots/mot-dancetrack/m3/mot-000001.json \
+                       -o data/renders/ours.png
+```
 
 ### Input and simplification on the same axes
 
@@ -437,6 +578,10 @@ python src\viz\plot.py data\renders\overlay.json -o data\renders\overlay.png
 ```sh
 python src/viz/plot.py data/renders/overlay.json -o data/renders/overlay.png
 ```
+
+For one of ours, load it from `data/error-matched/eps<E>/<algorithm>/...` as `res`, and drop
+the `fr` and `res["frechet"]` lines: it already has its `frechet`, and only `input_points` is
+missing.
 
 The input appears in grey behind the simplification in red, with its kept vertices marked, and
 the panel reports the algorithm, the compression achieved and the measured Fréchet distance.
@@ -488,7 +633,7 @@ What differs is only ever the shell:
 | run a binary | `.\build\...\ssk_simplify.exe` | `./build/.../ssk_simplify` |
 | download | `curl.exe` (bare `curl` is an alias) | `curl` |
 | loop over datasets | `foreach ($ds in Get-ChildItem ... -Directory)` | `for ds in data/trajectories/*/; do … done` |
-| run N shards at once | `ForEach-Object -Parallel` (PS 7) or `Start-Job` (5.1) | `xargs -P N` |
+| run N shards at once | `ForEach-Object -Parallel` (PS 7), or `Start-Job` / `Start-Process` (5.1) | `xargs -P N` |
 | line continuation | backtick `` ` `` | backslash `\` |
 
 Two Windows-only annoyances worth knowing, neither of which affects the code: MinGW-built
