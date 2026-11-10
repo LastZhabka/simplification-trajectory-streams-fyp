@@ -183,7 +183,7 @@ balls strictly inside `conv(G_v)`, so its shadow always has area.
 | which `p`, `q` to emit | any | `p` nearest the run's first vertex, and `q` the point of `S[p]` nearest its last vertex |
 | zero-area shadows | kept | dropped |
 | dimension | any `d` | 2 |
-| exact arithmetic | assumed | doubles; every test near a boundary errs inward, and `run()` works with δ less 16 ulps of the largest coordinate. Without that, points ours places exactly on `(1+ε)δ` could round past it when written back in absolute coordinates. A δ no larger than that margin returns the input unchanged |
+| exact arithmetic | assumed | doubles; every test near a boundary errs inward, and `run()` works with δ less 16 ulps of the largest coordinate. Without that, points ours places exactly on `(1+ε)δ` round past it, in its own geometry or when written back in absolute coordinates: 238 of 7,580 sampled pairs, by at most 0.55 ulp, decided in quad precision (2026-10-29). A δ no larger than that margin returns the input unchanged, which breaks `2κ − 2` on degenerate inputs: 157 of 981,135 pairs so far, all with an exact baseline. See the 2026-10-28 incident note in `archive/` |
 
 ### What differs from the archive prototype
 
