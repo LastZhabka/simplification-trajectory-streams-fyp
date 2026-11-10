@@ -12,6 +12,7 @@ namespace {
 
 using ssk::frechet::Curve;
 using ssk::frechet::Frechet;
+using ssk::frechet::Point;
 
 Curve<2> line(std::size_t n, double dy = 0.0) {
   Curve<2> c;
@@ -119,6 +120,35 @@ TEST("frechet/a simplification is never further than its worst kept point") {
   const double d = f.distance(c, every_other, 1e-9);
   CHECK_MSG(d <= worst + 1e-9, "dropping every other vertex cannot cost more than a step");
   CHECK_MSG(d > 0.0, "and it does cost something");
+}
+
+TEST("frechet/a point 1e-9 of a long segment off it is decided at its offset") {
+  // The scale of an exact baseline beside a long NGSIM step, where b^2 - 4ac cancelled to
+  // noise and about half of these came out wrong, both ways.
+  const Frechet<2> f;
+  std::uint32_t s = 2026;
+  const auto next = [&s] {
+    s = s * 1664525u + 1013904223u;
+    return static_cast<double>(s >> 8) / 16777216.0;
+  };
+  for (int i = 0; i < 200; ++i) {
+    const Point<2> p1{2.23e6 + 1e4 * next(), 1.37e6 + 1e4 * next()};
+    const double angle = 6.283185307179586 * next();
+    const Point<2> p2{p1[0] + 500.0 * std::cos(angle), p1[1] + 500.0 * std::sin(angle)};
+    const double along = 0.05 + 0.9 * next();
+    const double off = 5e-7 * (0.5 + next());
+    const Point<2> q{p1[0] + along * (p2[0] - p1[0]) - off * std::sin(angle),
+                     p1[1] + along * (p2[1] - p1[1]) + off * std::cos(angle)};
+
+    const double ux = p2[0] - p1[0];
+    const double uy = p2[1] - p1[1];
+    const double d = std::fabs(ux * (q[1] - p1[1]) - uy * (q[0] - p1[0])) / std::hypot(ux, uy);
+    const Curve<2> segment{p1, p2};
+    const Curve<2> bent{p1, q, p2};
+    CHECK_MSG(f.within(segment, bent, 1.01 * d), "within just above the offset");
+    CHECK_MSG(!f.within(segment, bent, 0.99 * d), "and not just below it");
+    CHECK_CLOSE(f.distance(segment, bent, 1e-12), d, 1e-3 * d);
+  }
 }
 
 }  // namespace

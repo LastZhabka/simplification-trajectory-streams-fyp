@@ -106,24 +106,18 @@ class Frechet {
 
   // Where the line through p1,p2 meets the ball of radius^2 around cp, as the scalars s with
   // p1 + s*(p2-p1) on the boundary. `begin` becomes kUnreachable when they do not meet.
+  // The closest point t0 first, then the half-chord around it, not upstream's b^2 - 4ac:
+  // that subtracts two terms of size |u|^2 |v|^2 to get one of size |u|^2 r^2, which is
+  // rounding noise once r is below about 1e-7 of the segment's length.
   static void intersections(const Point<D>& p1, const Point<D>& p2, const Point<D>& cp,
                             double r2, double& begin, double& end) {
     double a = 0.0;
     double b = 0.0;
-    double c = -r2;
     for (std::size_t k = D; k-- > 0;) {
       const double u = p2[k] - p1[k];
       const double v = p1[k] - cp[k];
       a += u * u;
       b += u * v;
-      c += v * v;
-    }
-    b *= 2.0;
-
-    const double discriminant = b * b - 4.0 * a * c;
-    if (discriminant < 0.0) {
-      begin = kUnreachable;
-      return;
     }
     if (a == 0.0) {
       if (dist2(p1, cp) <= r2) {
@@ -134,9 +128,20 @@ class Frechet {
       }
       return;
     }
-    const double root = std::sqrt(discriminant);
-    begin = (-b - root) / (2.0 * a);
-    end = (-b + root) / (2.0 * a);
+
+    const double t0 = -b / a;
+    double d2 = 0.0;
+    for (std::size_t k = D; k-- > 0;) {
+      const double w = (p1[k] - cp[k]) + t0 * (p2[k] - p1[k]);
+      d2 += w * w;
+    }
+    if (d2 > r2) {
+      begin = kUnreachable;
+      return;
+    }
+    const double half = std::sqrt((r2 - d2) / a);
+    begin = t0 - half;
+    end = t0 + half;
   }
 
   // Every interior point of `points` must match a point on `segments`, monotonically. A cheap

@@ -27,8 +27,11 @@ class Frechet {
 ```
 
 **`within` is the primitive.** Deciding *is d_F(a, b) ≤ r?* is what the algorithm actually
-computes, and it is exact — no tolerance, no approximation. `distance` bisects it, so it costs
-a tolerance and about nine decisions. Code that only needs a yes/no answer should ask for one.
+computes, and it is exact — no tolerance, no approximation. Down to radii far below a segment's
+length that needs the closest-point form of the line-circle intersection, not upstream's
+quadratic formula (see [Known issue](#known-issue-false-violations-at-tiny-radii)). `distance`
+bisects it, so it costs a tolerance and about nine decisions. Code that only needs a yes/no
+answer should ask for one.
 
 The instance holds a scratch buffer for the free-space frontline, so a driver measuring a
 corpus reuses one allocation across millions of calls. That is upstream's design, kept.
@@ -54,8 +57,7 @@ working memory is O(min(n, m)) rather than O(nm). The `BEGIN_NOT_REACHABLE = 2.0
 `begin <= 1.0` reachability test. The corner pre-check. The single-point special case. The
 two-sided monotone point-matching filter, run in both directions before the diagram is built,
 which rejects most non-matching pairs without touching a cell. `get_reachable_begin`'s four
-cases. The line-circle intersection by quadratic formula, including its `a == 0` branch for a
-degenerate segment.
+cases. The line-circle intersection's `a == 0` branch for a degenerate segment.
 
 *Changed:* upstream is templated on a point type plus a coordinate getter and a distance
 functor; this takes `Curve<D>` directly, since every curve here is
@@ -63,8 +65,14 @@ functor; this takes `Curve<D>` directly, since every curve here is
 loop — **counting down from `D-1` to `0`, matching the recursion's order**, so the
 floating-point sums are identical rather than merely equivalent. Names follow this repository.
 
-*Deviations, both deliberate:*
+*Deviations, all deliberate:*
 
+- **The line-circle intersection** (2026-11-11). Upstream solves `a s² + b s + c = 0` with
+  `b² − 4ac`, which is rounding noise once the radius is below about 1e-7 of the segment's
+  length. Ours finds the closest point of the line first, then the half-chord around it: the
+  same interval in exact arithmetic. The `a == 0` branch now runs first, because the new form
+  divides by `a`. Decisions at ordinary radii are unchanged; see the rerun below and
+  [Known issue](#known-issue-false-violations-at-tiny-radii).
 - Upstream leaves the per-cell `begin`/`end` scalars **uninitialised** when the line-circle
   solve finds no intersection: it assigns `begin` and returns, leaving `end` at whatever it
   held. The value is never read in a decision — a segment whose begin is unreachable is
@@ -95,12 +103,74 @@ The second row is the one that matters: `bb` is an independent implementation by
 authors, so agreement is evidence about the *answer*, not merely about the transcription. The
 third is the implementation this project used before and would otherwise be silently replacing.
 
-`tests/test_frechet.cpp`, 9 cases, covers what can be computed by hand — identical curves at
+**Rerun after the closest-point fix (2026-11-11).** 32,000 new decisions of the same design,
+half of the pairs at NGSIM-sized coordinates (2.2e6 ft), against the old form, which is `dv`'s
+arithmetic: **0 differences**. `bb` and the prototype were not rerun; their harness is not in
+the repository.
+
+`tests/test_frechet.cpp`, 10 cases, covers what can be computed by hand — identical curves at
 0, parallel lines at their separation, a polyline against its own endpoints at 0, a spike
 against its chord at the spike height, a segment against itself reversed at its full length
 (the matching must stay monotone) — plus 3D, degenerate curves of one point and of repeated
 points, decision and value agreeing either side of the answer, and a simplification never
-lying further from its input than the largest step it skips.
+lying further from its input than the largest step it skips. The tenth puts a point about
+1e-9 of a 500 ft segment off it, 200 times at NGSIM-sized coordinates, and asks for the
+decision at 1.01× and 0.99× its offset and for the value to 0.1%.
+
+## Known issue: false violations at tiny radii
+
+**Fixed in the code on 2026-11-11; the stored results are not re-measured yet.** Found
+2026-10-28. The full record, with the failing cases, is
+`archive/[2026-10-28] Incident - Frechet check reports false violations.md`.
+
+**The bug.** `intersections()` found where segment `p1 p2` meets the circle of radius `r`
+around `cp` by solving `a s² + b s + c = 0` with the textbook discriminant `b² − 4ac`, where
+`a = |u|²`, `b = 2 u·w`, `c = |w|² − r²`, `u = p2 − p1` and `w = p1 − cp`. The discriminant is
+`4|u|²(r² − d²)`, with `d` the distance from `cp` to the line. It is formed as the difference
+of two terms of size about `|u|²|w|²`, so its rounding error is about `2⁻⁵² |u|²|w|²`. When
+`r` is below roughly `1.5e-7 ×` the segment's length, that error is larger than the quantity
+itself, and `within` could answer either way.
+
+- **Where it showed.** Machine C's results flag 856 of 944,130 pairs over `(1+ε)δ`. Every one has
+  a bound of at most 169 measurement tolerances (`1e-9 ×` diagonal each), and 795 have a baseline
+  that was exact. The worst is reported at 18× its bound, a 5.3e-7 ft bound beside a 522 ft
+  segment.
+- **Why the verification missed it.** Its radii were 0.25× to 4× the true distance of random
+  curves, never a millionth of a segment.
+- **What else it touches.** `distance` bisects the same decision, so the baselines' d\* at that
+  scale are unreliable too, in either direction. That covers 65,373 of C's pairs (6.9%): those
+  with a bound below `1e-5 ×` diagonal.
+- **What it does not touch.** `ConvexShadow` is not at fault: every flagged output is within its
+  bound under the fix below, and under a `__float128` copy of this file. Output sizes are
+  counted, not measured, so size comparisons stand.
+
+**The fix.** `intersections()` now finds the closest point of the line first, `p1 + t0·u`
+with `t0 = −(u·w)/|u|²`, then the half-chord `√((r² − d²)/|u|²)` around it. In exact
+arithmetic it is the same interval. `d²` is summed from the perpendicular offset
+`w + t0·u` itself, whose rounding is about `2⁻⁵² |w|` per coordinate. So the error relative
+to `r²` grows with `|w|/r` instead of `(|w|/r)²`: about 1e-7 at a radius 1e-9 of the
+segment's length, where the old form's was about 100.
+
+**Measured, 2026-11-11:**
+
+| check | old form | new form |
+|---|---|---|
+| 200 points about 1e-9 of a 500 ft segment off it (the new unit test), decided at 1.01× and 0.99× the offset | 67 false violations, 133 false passes | 0 wrong |
+| `distance` on the same 200 | under half the truth in 127 (123 at the bisection floor), over double in 58 | within 0.1% |
+| 32,000 decisions at 0.25×–4× the distance (the cross-check above) | — | 0 differences from the old form |
+| the 856 flagged pairs in `data/error-matched`, at their stored bounds | reproduces all 856 stored verdicts | all 856 within |
+| every pair of 300 trajectories sampled from the same results, seed 0 (4,916 pairs) | reproduces all 4,916 | all within; no stored pass fails |
+
+**The 123 at the floor matter for step 4.** The old form also passed falsely, so a d\* at the
+bisection floor may not be an exact baseline at all: the old `distance` returns the floor
+whenever every small radius passes.
+
+**Still to do:**
+
+1. Re-measure the 65,373 pairs below `1e-5 ×` diagonal: the baseline d\* first, then ours at the
+   new d\*, then the statistics. Report pairs whose re-measured baseline is still exact, with d\*
+   at the bisection floor, on their own.
+2. Rerun the cross-check against `bb` and the prototype, once their harness is back.
 
 ## Cost
 
