@@ -20,6 +20,7 @@ recorded per algorithm.
 |---|---|---|---|---|
 | Douglas–Peucker (DPn) | [psimpl](https://psimpl.sourceforge.net/) v7 | MPL 1.1 | `simplify/douglas_peucker.hpp` | [simplification.md](simplification.md) |
 | SQUISH | [caoweiquan322/dots](https://github.com/caoweiquan322/dots) | see repo | `simplify/squish.{hpp,cpp}` | [simplification.md](simplification.md) |
+| SQUISH-E | [uestc-db/traj-compression](https://github.com/uestc-db/traj-compression), `online/SQUISH-E` | none stated | `simplify/squish_e.{hpp,cpp}` | [simplification.md](simplification.md) |
 | DOTS | [caoweiquan322/dots](https://github.com/caoweiquan322/dots) | see repo | `simplify/dots.{hpp,cpp}` | [simplification.md](simplification.md) |
 | Continuous Fréchet distance | [mwernerds/frechetrange](https://github.com/mwernerds/frechetrange), `detail/dv` | MIT | `frechet/frechet.hpp` | [frechet-distance.md](frechet-distance.md) |
 

@@ -154,6 +154,37 @@ test; the `buffer_size > 4` precondition.
 `itr += 2` → `std::prev` / `std::next`, `qRound` → `std::lround`. Output comes straight off
 the ordered map, which upstream sorted explicitly.
 
+### SQUISH-E — [uestc-db/traj-compression](https://github.com/uestc-db/traj-compression), `online/SQUISH-E/SQUISH_E.cpp`
+
+SQUISH-E(λ, μ), from the code of Zhang et al.'s experimental study. It is a separate
+implementation from the SQUISH above, not an extension of it: priorities are doubles, the
+queue is a plain vector searched linearly, and a removed point's priority is handed to its
+neighbours as a **maximum** rather than a sum.
+
+*Kept:* every function under its upstream name with its upstream body — `cacl_SED`,
+`adjust_priority`, `reduce`, `find_mini_priority`, and the main loop of `SQUISH_E`. The queue
+starts at a capacity of 4 and grows by one whenever `i / cmp_ratio >= capacity`, in integer
+division; when it fills, the interior point of lowest priority is removed, the first on ties.
+After the last point, removal continues while the lowest priority is `<= sed_error`. A zero
+time span between a point's neighbours gives a time ratio of 1, as upstream.
+
+*Changed:* upstream's globals `points`, `Q` and `capacity` are locals, so the queue is passed
+to each function. Its `Point` struct is `GPSPoint`, because `Point` is already the interface's
+point type. Its `lat` is our `y` and its `lon` our `x`, which keeps the two squares of the SED
+summed in upstream's order. `cmp_ratio < 1` is rejected, since upstream divides by it.
+
+*Dropped:* `gpsreader`, `main` and the timing.
+
+`Params` keys are upstream's argument names: `cmp_ratio` (λ, an `int`) and `sed_error` (μ).
+Both are required. `cmp_ratio = 1, sed_error = μ` is the error-bounded form, and
+`cmp_ratio = λ, sed_error = 0` the ratio-bounded one.
+
+*Verified:* `SQUISH_E.cpp` was compiled unmodified into a harness (`#define main`, then
+`#include`) and run beside the port on the same doubles: 551 trajectories from all nine
+datasets, 7 values of `cmp_ratio` by 9 of `sed_error`, **34 713 runs, 0 mismatches** in the
+kept indices. On upstream's bundled `20081023025304-0.plt` both keep 181 points at (5, 0) and
+264 at (1, 0.0001), the sizes of the two outputs upstream ships. It is not part of the sweep.
+
 ### DOTS — [caoweiquan322/dots](https://github.com/caoweiquan322/dots), `DotsSimplifier`
 
 *Kept:* the DAG search in full — both the streaming and the `finished` branch, `getLSSD`'s
@@ -179,6 +210,30 @@ translation, so no result changes. Note upstream centres `x` and `y` on their **
 rebases `t` on its **first value**, where we use the first point for all three — again, both
 are translations. Calling `feed()` directly still enforces the original guards, and there is a
 test pinning that.
+
+**The second deviation is a fix: a vertex is a parent only of later points.** Upstream's
+`getLSSD(fst, lst)` returns 0 whenever `fst + 1 >= lst`. That is meant for adjacent points, but
+it is also true when `fst > lst`. A point that no frontier vertex accepts stays unassigned while
+later points join and become the next frontier; when it is tried again, the vertices it is
+compared with come after it, the cost is 0, and it is joined to one of them — in the search, or
+in `minimizeISSED`, which re-parents each new point to its cheapest vertex without asking
+whether that vertex precedes it. The decoded path then steps backwards (1667, then 1664), and
+the output is not a subsequence of the input. That was 1 034 documents of the first corpus;
+`archive/[2026-08-16] Incident - DOTS emits non-monotone indices.md`. The copy of the dots
+repository in `uestc-db/traj-compression` has the same code.
+
+The port now skips a frontier vertex that comes after the point, in both branches of the
+search and in `minimize_issed`. A point every frontier vertex has passed can no longer be a
+vertex — it lies inside a shortcut — so it is marked `kPassed`, which lets the input position
+advance as it did when upstream gave such a point its backwards parent. Without that mark the
+search would never finish. `lssd` itself is unchanged.
+
+Measured against the unfixed port on 365 trajectories from all nine datasets at 14 thresholds
+from 1e-10 to 1e3, **5 110 runs**: in the 4 705 where the unfixed code made no backwards link,
+the outputs are identical. In the 405 where it did, 333 outputs are still identical and 72
+differ; one keeps more points and none fewer. The unfixed code returned out-of-order indices in
+69 runs, the fixed code in none, and every run kept both endpoints and finished.
+`simplify/dots never joins a point to a later vertex` pins a 20-point case.
 
 *Dropped:* cascade mode entirely (`feedIndex`, `cascadeRoot`, `batchDotsCascade*`), which is
 a distinct variant from the paper rather than part of DOTS proper, and the `getAverageSED` /
@@ -211,30 +266,6 @@ reachable. Bisecting costs DOTS its online property, which is worth stating when
 table mixes it with the streaming algorithms.
 
 The tolerance form of DP was the reason this was awkward: bisecting `tol` hit the target
-**The second deviation is a fix: a vertex is a parent only of later points.** Upstream's
-`getLSSD(fst, lst)` returns 0 whenever `fst + 1 >= lst`. That is meant for adjacent points, but
-it is also true when `fst > lst`. A point that no frontier vertex accepts stays unassigned while
-later points join and become the next frontier; when it is tried again, the vertices it is
-compared with come after it, the cost is 0, and it is joined to one of them — in the search, or
-in `minimizeISSED`, which re-parents each new point to its cheapest vertex without asking
-whether that vertex precedes it. The decoded path then steps backwards (1667, then 1664), and
-the output is not a subsequence of the input. That was 1 034 documents of the first corpus;
-`archive/[2026-08-16] Incident - DOTS emits non-monotone indices.md`. The copy of the dots
-repository in `uestc-db/traj-compression` has the same code.
-
-The port now skips a frontier vertex that comes after the point, in both branches of the
-search and in `minimize_issed`. A point every frontier vertex has passed can no longer be a
-vertex — it lies inside a shortcut — so it is marked `kPassed`, which lets the input position
-advance as it did when upstream gave such a point its backwards parent. Without that mark the
-search would never finish. `lssd` itself is unchanged.
-
-Measured against the unfixed port on 365 trajectories from all nine datasets at 14 thresholds
-from 1e-10 to 1e3, **5 110 runs**: in the 4 705 where the unfixed code made no backwards link,
-the outputs are identical. In the 405 where it did, 333 outputs are still identical and 72
-differ; one keeps more points and none fewer. The unfixed code returned out-of-order indices in
-69 runs, the fixed code in none, and every run kept both endpoints and finished.
-`simplify/dots never joins a point to a later vertex` pins a 20-point case.
-
 exactly on only 79.7% of the same budgets, missing by up to 33% on small ones, because its
 count only moves at distances present in the curve and the radial pre-pass drops points in
 blocks. DPn removes the search entirely.

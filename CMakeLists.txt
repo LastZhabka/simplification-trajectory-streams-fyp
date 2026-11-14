@@ -23,6 +23,7 @@ add_library(ssk
   src/algo/simplify/convex_shadow.cpp
   src/algo/simplify/dots.cpp
   src/algo/simplify/squish.cpp
+  src/algo/simplify/squish_e.cpp
 )
 target_include_directories(ssk PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/algo)
 

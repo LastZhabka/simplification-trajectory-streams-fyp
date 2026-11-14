@@ -3,6 +3,7 @@
 #include "simplify/dots.hpp"
 #include "simplify/douglas_peucker.hpp"
 #include "simplify/squish.hpp"
+#include "simplify/squish_e.hpp"
 #include "test_main.hpp"
 
 #include <cmath>
@@ -168,6 +169,47 @@ TEST("simplify/squish rejects a buffer size of 4 or less") {
   CHECK_MSG(threw, "upstream requires buffer_size > 4");
 }
 
+// --- SQUISH-E ----------------------------------------------------------------------
+
+TEST("simplify/squish-e keeps about one point in cmp_ratio") {
+  const Curve<2> c = zigzag(200, 1.0);
+  const Context in = uniform_time(c.size());
+  std::size_t previous = c.size();
+  for (const double ratio : {2.0, 4.0, 8.0, 16.0}) {
+    const auto out =
+        ssk::simplify::SquishE(Params{{"cmp_ratio", ratio}, {"sed_error", 0.0}}).indices(c, in);
+    check_contract(out, c.size(), "squish-e");
+    CHECK_MSG(out.size() <= previous, "a higher ratio must not keep more points");
+    CHECK_MSG(static_cast<double>(out.size()) <= static_cast<double>(c.size()) / ratio + 4.0,
+              "the queue's capacity is 4 plus one point per cmp_ratio inputs");
+    previous = out.size();
+  }
+}
+
+TEST("simplify/squish-e drops more as sed_error grows") {
+  const Curve<2> c = wander(120);
+  const Context in = uniform_time(c.size());
+  std::size_t previous = c.size();
+  for (const double error : {0.0, 0.5, 2.0, 8.0, 1e9}) {
+    const auto out =
+        ssk::simplify::SquishE(Params{{"cmp_ratio", 1.0}, {"sed_error", error}}).indices(c, in);
+    check_contract(out, c.size(), "squish-e");
+    CHECK_MSG(out.size() <= previous, "a looser bound must not keep more points");
+    previous = out.size();
+  }
+  CHECK_MSG(previous == 2, "an unbounded sed_error leaves only the endpoints");
+}
+
+TEST("simplify/squish-e rejects a cmp_ratio below 1") {
+  bool threw = false;
+  try {
+    const ssk::simplify::SquishE sq(Params{{"cmp_ratio", 0.0}, {"sed_error", 0.0}});
+  } catch (const std::runtime_error&) {
+    threw = true;
+  }
+  CHECK_MSG(threw, "upstream divides by cmp_ratio");
+}
+
 // --- DOTS --------------------------------------------------------------------------
 
 TEST("simplify/dots keeps a straight line's endpoints only") {
@@ -216,6 +258,26 @@ TEST("simplify/dots raw feed still rejects an un-normalised timestamp") {
   CHECK_MSG(threw, "upstream's numerical guard must survive the port");
 }
 
+// Twenty points of ngsim-us-101/ngsim-000629, in thousandths of a foot from the first, at the
+// threshold the sweep found for it. Upstream's DotsSimplifier returns 0, 1, 3, 12, 9, 19 here:
+// point 9 is skipped by the frontier, then joined to vertex 12, which comes after it.
+TEST("simplify/dots never joins a point to a later vertex") {
+  const Curve<2> c{{0.000, 0.000},        {4.936, -4.989},       {-1007.273, 950.466},
+                   {-1007.273, 950.466},  {-1004.920, 947.875},  {-1004.920, 947.875},
+                   {-1002.568, 945.283},  {-1002.568, 945.283},  {-1000.215, 942.692},
+                   {-1000.215, 942.692},  {-997.863, 940.100},   {-997.863, 940.100},
+                   {-995.510, 937.509},   {-995.510, 937.509},   {-993.158, 934.918},
+                   {-993.158, 934.918},   {-990.805, 932.326},   {-990.805, 932.326},
+                   {-988.453, 929.735},   {-988.453, 929.735}};
+  const Context in{{0,       100,     1001300, 1001300, 1001400, 1001400, 1001500,
+                    1001500, 1001600, 1001600, 1001700, 1001700, 1001800, 1001800,
+                    1001900, 1001900, 1002000, 1002000, 1002100, 1002100}};
+  const auto out =
+      ssk::simplify::Dots(Params{{"lssd_threshold", 1.2986669948159435e-06}}).indices(c, in);
+  check_contract(out, c.size(), "dots");
+  CHECK(out == std::vector<std::size_t>({0, 1, 3, 12, 17, 19}));
+}
+
 // --- the shared contract -----------------------------------------------------------
 
 TEST("simplify/all reject a missing clock when they need one") {
@@ -258,26 +320,6 @@ TEST("simplify/params reports a missing required parameter") {
 // An algorithm that emits vertices which are nowhere in the input -- the case the interface
 // has to allow, and the reason `simplify` returns points rather than positions.
 class Midpoints : public ssk::simplify::Simplifier<2> {
-// Twenty points of ngsim-us-101/ngsim-000629, in thousandths of a foot from the first, at the
-// threshold the sweep found for it. Upstream's DotsSimplifier returns 0, 1, 3, 12, 9, 19 here:
-// point 9 is skipped by the frontier, then joined to vertex 12, which comes after it.
-TEST("simplify/dots never joins a point to a later vertex") {
-  const Curve<2> c{{0.000, 0.000},        {4.936, -4.989},       {-1007.273, 950.466},
-                   {-1007.273, 950.466},  {-1004.920, 947.875},  {-1004.920, 947.875},
-                   {-1002.568, 945.283},  {-1002.568, 945.283},  {-1000.215, 942.692},
-                   {-1000.215, 942.692},  {-997.863, 940.100},   {-997.863, 940.100},
-                   {-995.510, 937.509},   {-995.510, 937.509},   {-993.158, 934.918},
-                   {-993.158, 934.918},   {-990.805, 932.326},   {-990.805, 932.326},
-                   {-988.453, 929.735},   {-988.453, 929.735}};
-  const Context in{{0,       100,     1001300, 1001300, 1001400, 1001400, 1001500,
-                    1001500, 1001600, 1001600, 1001700, 1001700, 1001800, 1001800,
-                    1001900, 1001900, 1002000, 1002000, 1002100, 1002100}};
-  const auto out =
-      ssk::simplify::Dots(Params{{"lssd_threshold", 1.2986669948159435e-06}}).indices(c, in);
-  check_contract(out, c.size(), "dots");
-  CHECK(out == std::vector<std::size_t>({0, 1, 3, 12, 17, 19}));
-}
-
  public:
   [[nodiscard]] std::string name() const override { return "midpoints"; }
 
@@ -344,6 +386,23 @@ TEST("simplify/all reproduce the upstream reference output") {
         Idx({0, 1, 6, 8, 10, 12, 14, 17, 21, 23, 27, 29, 32, 34, 39}));
   CHECK(ssk::simplify::Dots(Params{{"lssd_threshold", 10.0}}).indices(c, in) ==
         Idx({0, 10, 14, 28, 39}));
+}
+
+// Pinned against online/SQUISH-E/SQUISH_E.cpp of uestc-db/traj-compression, compiled
+// unmodified and run on this curve.
+TEST("simplify/squish-e reproduces the upstream reference output") {
+  const Curve<2> c = wander(40);
+  const Context in = uniform_time(c.size());
+
+  using Idx = std::vector<std::size_t>;
+  const auto run = [&](double ratio, double error) {
+    return ssk::simplify::SquishE(Params{{"cmp_ratio", ratio}, {"sed_error", error}})
+        .indices(c, in);
+  };
+  CHECK(run(4.0, 0.0) == Idx({0, 11, 15, 22, 27, 30, 32, 38, 39}));
+  CHECK(run(2.0, 0.0) ==
+        Idx({0, 6, 8, 10, 11, 13, 15, 17, 19, 21, 24, 25, 27, 29, 31, 33, 36, 38, 39}));
+  CHECK(run(1.0, 1.5) == Idx({0, 1, 4, 8, 10, 13, 17, 21, 24, 27, 29, 32, 34, 38, 39}));
 }
 
 TEST("simplify/curve_of bridges a trajectory document") {
