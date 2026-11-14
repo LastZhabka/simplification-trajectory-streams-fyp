@@ -258,6 +258,26 @@ TEST("simplify/params reports a missing required parameter") {
 // An algorithm that emits vertices which are nowhere in the input -- the case the interface
 // has to allow, and the reason `simplify` returns points rather than positions.
 class Midpoints : public ssk::simplify::Simplifier<2> {
+// Twenty points of ngsim-us-101/ngsim-000629, in thousandths of a foot from the first, at the
+// threshold the sweep found for it. Upstream's DotsSimplifier returns 0, 1, 3, 12, 9, 19 here:
+// point 9 is skipped by the frontier, then joined to vertex 12, which comes after it.
+TEST("simplify/dots never joins a point to a later vertex") {
+  const Curve<2> c{{0.000, 0.000},        {4.936, -4.989},       {-1007.273, 950.466},
+                   {-1007.273, 950.466},  {-1004.920, 947.875},  {-1004.920, 947.875},
+                   {-1002.568, 945.283},  {-1002.568, 945.283},  {-1000.215, 942.692},
+                   {-1000.215, 942.692},  {-997.863, 940.100},   {-997.863, 940.100},
+                   {-995.510, 937.509},   {-995.510, 937.509},   {-993.158, 934.918},
+                   {-993.158, 934.918},   {-990.805, 932.326},   {-990.805, 932.326},
+                   {-988.453, 929.735},   {-988.453, 929.735}};
+  const Context in{{0,       100,     1001300, 1001300, 1001400, 1001400, 1001500,
+                    1001500, 1001600, 1001600, 1001700, 1001700, 1001800, 1001800,
+                    1001900, 1001900, 1002000, 1002000, 1002100, 1002100}};
+  const auto out =
+      ssk::simplify::Dots(Params{{"lssd_threshold", 1.2986669948159435e-06}}).indices(c, in);
+  check_contract(out, c.size(), "dots");
+  CHECK(out == std::vector<std::size_t>({0, 1, 3, 12, 17, 19}));
+}
+
  public:
   [[nodiscard]] std::string name() const override { return "midpoints"; }
 

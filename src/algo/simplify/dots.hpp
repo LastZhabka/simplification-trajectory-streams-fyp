@@ -39,6 +39,7 @@ class Dots : public SubsetSimplifier<2> {
  private:
   void dag_search();
   [[nodiscard]] double lssd(int fst, int lst) const;
+  [[nodiscard]] bool passed(int i) const;
   [[nodiscard]] bool need_update_vk() const;
   void update_vk();
   void minimize_issed();

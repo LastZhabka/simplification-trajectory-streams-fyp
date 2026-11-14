@@ -4,6 +4,17 @@
 #include <stdexcept>
 
 namespace ssk::simplify {
+namespace {
+
+// The deviation from upstream, see docs/simplification.md. Upstream's getLSSD returns 0
+// whenever fst + 1 >= lst, which also covers fst > lst, so a point the frontier had skipped was
+// joined to a frontier vertex that comes after it, and the decoded path stepped backwards.
+// Here a vertex is a parent only of later points, and a point every frontier vertex has passed
+// is marked kPassed: it is interior to a shortcut and can no longer become a vertex.
+constexpr int kUnassigned = -1;
+constexpr int kPassed = -2;
+
+}  // namespace
 
 Dots::Dots(const Params& params)
     : lssd_th_(params.get("lssd_threshold")),
@@ -81,7 +92,7 @@ void Dots::feed(double x, double y, double t) {
     yt_sum_.push_back(yt_sum_[n] + y * t);
   }
   issed_.push_back(0.0);
-  parents_.push_back(-1);
+  parents_.push_back(kUnassigned);
 }
 
 bool Dots::read_index(int& index) {
@@ -134,6 +145,15 @@ double Dots::lssd(int fst, int lst) const {
          2 * c1y / c3y * (y_sum_[p] - y_sum_[f]) - 2 * c5y / c3y * (yt_sum_[p] - yt_sum_[f]);
 }
 
+bool Dots::passed(int i) const {
+  for (const int j : v_k_) {
+    if (j < i) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool Dots::need_update_vk() const {
   return static_cast<int>(v_k_.size()) == num_terminated_ ||
          static_cast<int>(v_l_.size()) >= max_vk_size_;
@@ -168,6 +188,9 @@ void Dots::minimize_issed() {
     double min_distance = issed_[ui];
     int min_parent = parents_[ui];
     for (const int j : v_k_) {
+      if (j > i) {
+        continue;
+      }
       const double local = lssd(j, i);
       const double distance = issed_[static_cast<std::size_t>(j)] + local;
       if (local < lssd_th_ && distance < min_distance) {
@@ -207,10 +230,10 @@ void Dots::dag_search() {
     while (input_count_ < num_points) {
       for (int i = input_count_; i < num_points; ++i) {
         const auto ui = static_cast<std::size_t>(i);
-        if (parents_[ui] < 0) {
+        if (parents_[ui] == kUnassigned) {
           for (std::size_t j = 0; j < v_k_.size(); ++j) {
             const int j_index = v_k_[j];
-            if (terminated_[j]) {
+            if (terminated_[j] || j_index > i) {
               continue;
             }
             const double distance = lssd(j_index, i);
@@ -228,8 +251,11 @@ void Dots::dag_search() {
               }
             }
           }
+          if (parents_[ui] == kUnassigned && passed(i)) {
+            parents_[ui] = kPassed;
+          }
         }
-        if (parents_[ui] >= 0 && input_count_ == i) {
+        if (parents_[ui] != kUnassigned && input_count_ == i) {
           ++input_count_;
         }
         if (need_update_vk()) {
@@ -264,10 +290,10 @@ void Dots::dag_search() {
     }
     for (int i = input_count_; i < num_points; ++i) {
       const auto ui = static_cast<std::size_t>(i);
-      if (parents_[ui] < 0) {
+      if (parents_[ui] == kUnassigned) {
         for (std::size_t j = 0; j < v_k_.size(); ++j) {
           const int j_index = v_k_[j];
-          if (terminated_[j]) {
+          if (terminated_[j] || j_index > i) {
             continue;
           }
           const double distance = lssd(j_index, i);
@@ -295,8 +321,11 @@ void Dots::dag_search() {
             }
           }
         }
+        if (parents_[ui] == kUnassigned && passed(i)) {
+          parents_[ui] = kPassed;
+        }
       }
-      if (parents_[ui] >= 0 && input_count_ == i) {
+      if (parents_[ui] != kUnassigned && input_count_ == i) {
         ++input_count_;
       }
       if (vk_updated) {
