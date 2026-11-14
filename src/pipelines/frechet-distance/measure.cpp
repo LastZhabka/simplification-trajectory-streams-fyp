@@ -25,8 +25,6 @@ double diagonal(const frechet::Curve<2>& curve) {
 Measurement measure(const frechet::Frechet<2>& computer, const frechet::Curve<2>& input,
                     const frechet::Curve<2>& simplified, double relative_tol) {
   Measurement m;
-  m.input_points = input.size();
-  m.output_points = simplified.size();
   const double scale = diagonal(input);
   // A curve with no extent still needs a positive tolerance for the bisection to terminate.
   m.tolerance = (scale > 0.0) ? scale * relative_tol : relative_tol;

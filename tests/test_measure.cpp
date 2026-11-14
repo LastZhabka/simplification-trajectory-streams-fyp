@@ -43,8 +43,6 @@ TEST("measure/a known distance comes back") {
   const Curve<2> c = zigzag(5, 2.0);
   const Curve<2> ends{c.front(), c.back()};
   const auto m = measure(f, c, ends, 1e-12);
-  CHECK(m.input_points == 5);
-  CHECK(m.output_points == 2);
   CHECK_CLOSE(m.distance, 2.0, 1e-6);
 }
 

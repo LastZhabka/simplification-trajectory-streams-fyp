@@ -12,14 +12,17 @@
 // same reason it is in the sweep. A whole-corpus pass runs for hours, so `--skip-existing`
 // makes an interrupted one resumable: a measurement is a pure function of the two documents
 // it reads, so one already written is one that need not be computed again.
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <string>
 #include <vector>
 
+#include "corpus.hpp"
 #include "measure.hpp"
+#include "simplify/simplifier.hpp"
 
 namespace fs = std::filesystem;
 using namespace ssk;
@@ -78,44 +81,14 @@ Options parse_args(int argc, char** argv) {
   return opt;
 }
 
-frechet::Curve<2> curve_of(const io::Document& doc) {
-  frechet::Curve<2> c;
-  c.reserve(doc.points.size());
-  for (const io::Point& p : doc.points) {
-    c.push_back({p[0], p[1]});
-  }
-  return c;
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
   const Options opt = parse_args(argc, argv);
-  const fs::path in_dir = fs::path(opt.in).lexically_normal();
-  const std::string dataset = in_dir.has_filename()
-                                  ? in_dir.filename().string()
-                                  : in_dir.parent_path().filename().string();
+  const std::string dataset = pipelines::dataset_of(opt.in);
+  const std::vector<fs::path> files =
+      pipelines::trajectory_files(opt.in, opt.limit, opt.shard, opt.shards);
 
-  std::vector<fs::path> files;
-  for (const auto& entry : fs::directory_iterator(in_dir)) {
-    if (entry.path().extension() == ".json" && entry.path().filename() != "index.json") {
-      files.push_back(entry.path());
-    }
-  }
-  std::sort(files.begin(), files.end());
-  if (opt.limit > 0 && files.size() > static_cast<std::size_t>(opt.limit)) {
-    files.resize(static_cast<std::size_t>(opt.limit));
-  }
-  if (opt.shards > 1) {
-    std::vector<fs::path> mine;
-    for (std::size_t i = static_cast<std::size_t>(opt.shard); i < files.size();
-         i += static_cast<std::size_t>(opt.shards)) {
-      mine.push_back(files[i]);
-    }
-    files = std::move(mine);
-  }
-
-  const std::vector<std::string> algorithms{"douglas-peucker-n", "squish", "dots"};
   const frechet::Frechet<2> computer;
   const auto started = std::chrono::steady_clock::now();
   std::size_t written = 0, cells = 0, skipped = 0;
@@ -123,10 +96,10 @@ int main(int argc, char** argv) {
 
   for (const fs::path& file : files) {
     const io::Document input = io::read_trajectory_file(file.string());
-    const frechet::Curve<2> curve = curve_of(input);
+    const frechet::Curve<2> curve = simplify::curve_of<2>(input);
     const std::string name = file.filename().string();
 
-    for (const std::string& algorithm : algorithms) {
+    for (const std::string& algorithm : pipelines::kBaselines) {
       for (int m = 1; m <= opt.rates; ++m) {
         const std::string rate = "m" + std::to_string(m);
         const fs::path from = fs::path(opt.simplified) / algorithm / dataset / rate / name;
@@ -134,26 +107,21 @@ int main(int argc, char** argv) {
           continue;
         }
         const fs::path to = fs::path(opt.out) / algorithm / dataset / rate / name;
-        // Resuming an interrupted run: the measurement is a pure function of the two
-        // documents, so one already on disk is one that need not be computed again.
         if (opt.skip_existing && fs::exists(to)) {
           ++skipped;
           continue;
         }
         const json::Value doc = json::parse_file(from.string());
-        const frechet::Curve<2> simplified = curve_of(io::read_trajectory(doc));
+        const frechet::Curve<2> simplified = simplify::curve_of<2>(io::read_trajectory(doc));
 
         const pipelines::Measurement measured =
             pipelines::measure(computer, curve, simplified, opt.relative_tol);
         cells += curve.size() * simplified.size();
         worst = std::max(worst, measured.distance);
 
-        fs::create_directories(to.parent_path());
-        std::ofstream stream(to);
-        pipelines::to_json(input, doc, dataset, dataset + "/" + name,
-                           algorithm + "/" + dataset + "/" + rate + "/" + name, measured)
-            .write(stream);
-        stream << '\n';
+        pipelines::write_document(
+            to, pipelines::to_json(input, doc, dataset, dataset + "/" + name,
+                                   algorithm + "/" + dataset + "/" + rate + "/" + name, measured));
         ++written;
       }
     }

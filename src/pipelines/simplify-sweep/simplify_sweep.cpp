@@ -14,12 +14,12 @@
 // those long tracks spread across workers instead of landing on one.
 #include <chrono>
 #include <cstdio>
-#include <cstring>
+#include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <string>
 #include <vector>
 
+#include "corpus.hpp"
 #include "io/trajectory.hpp"
 #include "sweep.hpp"
 
@@ -32,11 +32,17 @@ struct Options {
   std::string in;
   std::string out = "data/simplified-trajectories";
   int rates = 6;
-  int limit = 0;   // 0 means every trajectory
-  int shard = 0;   // this worker's index, for splitting one dataset across processes
+  int limit = 0;
+  int shard = 0;
   int shards = 1;
   bool dots = true;
 };
+
+void usage() {
+  std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N] "
+                       "[--shard I --shards N] [--no-dots]\n");
+  std::exit(2);
+}
 
 Options parse_args(int argc, char** argv) {
   Options opt;
@@ -58,54 +64,22 @@ Options parse_args(int argc, char** argv) {
     } else if (arg == "--no-dots") {
       opt.dots = false;
     } else {
-      std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N] "
-                   "[--shard I --shards N] [--no-dots]\n");
-      std::exit(2);
+      usage();
     }
   }
   if (opt.in.empty()) {
-    std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N] "
-                   "[--shard I --shards N] [--no-dots]\n");
-    std::exit(2);
+    usage();
   }
   return opt;
-}
-
-void write_document(const fs::path& path, const json::Value& doc) {
-  fs::create_directories(path.parent_path());
-  std::ofstream out(path);
-  doc.write(out);
-  out << '\n';
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
   const Options opt = parse_args(argc, argv);
-  // A trailing separator -- which tab completion adds -- makes filename() empty.
-  const fs::path in_dir = fs::path(opt.in).lexically_normal();
-  const std::string dataset = in_dir.has_filename()
-                                  ? in_dir.filename().string()
-                                  : in_dir.parent_path().filename().string();
-
-  std::vector<fs::path> files;
-  for (const auto& entry : fs::directory_iterator(in_dir)) {
-    if (entry.path().extension() == ".json" && entry.path().filename() != "index.json") {
-      files.push_back(entry.path());
-    }
-  }
-  std::sort(files.begin(), files.end());
-  if (opt.limit > 0 && files.size() > static_cast<std::size_t>(opt.limit)) {
-    files.resize(static_cast<std::size_t>(opt.limit));
-  }
-  if (opt.shards > 1) {
-    std::vector<fs::path> mine;
-    for (std::size_t i = static_cast<std::size_t>(opt.shard); i < files.size();
-         i += static_cast<std::size_t>(opt.shards)) {
-      mine.push_back(files[i]);
-    }
-    files = std::move(mine);
-  }
+  const std::string dataset = pipelines::dataset_of(opt.in);
+  const std::vector<fs::path> files =
+      pipelines::trajectory_files(opt.in, opt.limit, opt.shard, opt.shards);
 
   const auto started = std::chrono::steady_clock::now();
   std::size_t points = 0, written = 0, no_clock = 0, unordered = 0;
@@ -136,7 +110,7 @@ int main(int argc, char** argv) {
           continue;
         }
         const std::string rate = "m" + std::to_string(run.m);
-        write_document(fs::path(opt.out) / sweep.algorithm / dataset / rate / file.filename(),
+        pipelines::write_document(fs::path(opt.out) / sweep.algorithm / dataset / rate / file.filename(),
                        pipelines::run_to_json(doc, source, sweep.algorithm, run));
         ++written;
       }

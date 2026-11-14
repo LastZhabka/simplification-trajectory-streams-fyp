@@ -7,7 +7,6 @@
 // the input happens to use.
 #pragma once
 
-#include <cstddef>
 #include <string>
 
 #include "frechet/frechet.hpp"
@@ -19,8 +18,6 @@ namespace ssk::pipelines {
 struct Measurement {
   double distance = 0.0;
   double tolerance = 0.0;
-  std::size_t input_points = 0;
-  std::size_t output_points = 0;
 };
 
 // Largest extent of the curve, as a scale for the tolerance.

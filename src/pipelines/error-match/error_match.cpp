@@ -12,16 +12,15 @@
 // each value is its own run, and a result that does not say which eps produced it cannot be
 // reproduced. The summary is written last, so with --skip-existing a trajectory that has one
 // is finished, and an interrupted run resumes where it stopped.
-#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include "corpus.hpp"
 #include "match.hpp"
 
 namespace fs = std::filesystem;
@@ -84,45 +83,17 @@ Options parse_args(int argc, char** argv) {
   return opt;
 }
 
-void write_document(const fs::path& path, const json::Value& doc) {
-  fs::create_directories(path.parent_path());
-  std::ofstream out(path);
-  doc.write(out);
-  out << '\n';
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
   const Options opt = parse_args(argc, argv);
-  const fs::path in_dir = fs::path(opt.in).lexically_normal();
-  const std::string dataset = in_dir.has_filename()
-                                  ? in_dir.filename().string()
-                                  : in_dir.parent_path().filename().string();
-
-  std::vector<fs::path> files;
-  for (const auto& entry : fs::directory_iterator(in_dir)) {
-    if (entry.path().extension() == ".json" && entry.path().filename() != "index.json") {
-      files.push_back(entry.path());
-    }
-  }
-  std::sort(files.begin(), files.end());
-  if (opt.limit > 0 && files.size() > static_cast<std::size_t>(opt.limit)) {
-    files.resize(static_cast<std::size_t>(opt.limit));
-  }
-  if (opt.shards > 1) {
-    std::vector<fs::path> mine;
-    for (std::size_t i = static_cast<std::size_t>(opt.shard); i < files.size();
-         i += static_cast<std::size_t>(opt.shards)) {
-      mine.push_back(files[i]);
-    }
-    files = std::move(mine);
-  }
+  const std::string dataset = pipelines::dataset_of(opt.in);
+  const std::vector<fs::path> files =
+      pipelines::trajectory_files(opt.in, opt.limit, opt.shard, opt.shards);
 
   std::ostringstream eps_dir;
   eps_dir << "eps" << opt.eps;
   const fs::path root = fs::path(opt.out) / eps_dir.str();
-  const std::vector<std::string> algorithms{"douglas-peucker-n", "squish", "dots"};
   const frechet::Frechet<2> computer;
   const auto started = std::chrono::steady_clock::now();
   std::size_t matched = 0, points = 0, over = 0, skipped = 0;
@@ -139,7 +110,7 @@ int main(int argc, char** argv) {
     const std::string source = dataset + "/" + name;
 
     std::vector<pipelines::Match> matches;
-    for (const std::string& algorithm : algorithms) {
+    for (const std::string& algorithm : pipelines::kBaselines) {
       for (int m = 1; m <= opt.rates; ++m) {
         const std::string rate = "m" + std::to_string(m);
         const fs::path from = fs::path(opt.distances) / algorithm / dataset / rate / name;
@@ -148,15 +119,15 @@ int main(int argc, char** argv) {
         }
         const pipelines::Match& match = matches.emplace_back(pipelines::match(
             computer, curve, json::parse_file(from.string()), opt.eps, opt.relative_tol));
-        write_document(root / algorithm / dataset / rate / name,
+        pipelines::write_document(root / algorithm / dataset / rate / name,
                        pipelines::match_to_json(input, dataset, source, opt.eps, match));
 
         points += curve.size();
         over += !match.within_bound;
       }
     }
-    write_document(summary,
-                   pipelines::summary_to_json(input, dataset, source, opt.eps, matches));
+    pipelines::write_document(
+        summary, pipelines::summary_to_json(input, dataset, source, opt.eps, matches));
     matched += matches.size();
   }
 

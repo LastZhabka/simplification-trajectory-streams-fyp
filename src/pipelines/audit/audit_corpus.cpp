@@ -10,11 +10,13 @@
 //
 // The tool never deletes anything itself: verification and mutation are worth keeping apart.
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 #include <vector>
 
 #include "audit.hpp"
+#include "corpus.hpp"
 
 namespace fs = std::filesystem;
 using namespace ssk;
@@ -27,6 +29,11 @@ struct Options {
   int rates = 6;
   bool paths_only = false;
 };
+
+void usage() {
+  std::fprintf(stderr, "usage: ssk_audit --in DIR [--results DIR] [--rates N] [--paths]\n");
+  std::exit(2);
+}
 
 Options parse_args(int argc, char** argv) {
   Options opt;
@@ -42,14 +49,11 @@ Options parse_args(int argc, char** argv) {
     } else if (arg == "--paths") {
       opt.paths_only = true;
     } else {
-      std::fprintf(stderr,
-                   "usage: ssk_audit --in DIR [--results DIR] [--rates N] [--paths]\n");
-      std::exit(2);
+      usage();
     }
   }
   if (opt.in.empty()) {
-    std::fprintf(stderr, "usage: ssk_audit --in DIR [--results DIR] [--rates N] [--paths]\n");
-    std::exit(2);
+    usage();
   }
   return opt;
 }
@@ -58,21 +62,14 @@ Options parse_args(int argc, char** argv) {
 
 int main(int argc, char** argv) {
   const Options opt = parse_args(argc, argv);
-  const fs::path in_dir = fs::path(opt.in).lexically_normal();
-  const std::string dataset = in_dir.has_filename()
-                                  ? in_dir.filename().string()
-                                  : in_dir.parent_path().filename().string();
-  const std::vector<std::string> algorithms{"douglas-peucker-n", "squish", "dots"};
+  const std::string dataset = pipelines::dataset_of(opt.in);
 
   std::size_t checked = 0, bad = 0;
-  for (const auto& entry : fs::directory_iterator(in_dir)) {
-    if (entry.path().extension() != ".json" || entry.path().filename() == "index.json") {
-      continue;
-    }
-    const io::Document input = io::read_trajectory_file(entry.path().string());
-    const std::string name = entry.path().filename().string();
+  for (const fs::path& file : pipelines::trajectory_files(opt.in)) {
+    const io::Document input = io::read_trajectory_file(file.string());
+    const std::string name = file.filename().string();
 
-    for (const std::string& algorithm : algorithms) {
+    for (const std::string& algorithm : pipelines::kBaselines) {
       for (int m = 1; m <= opt.rates; ++m) {
         const fs::path p =
             fs::path(opt.results) / algorithm / dataset / ("m" + std::to_string(m)) / name;

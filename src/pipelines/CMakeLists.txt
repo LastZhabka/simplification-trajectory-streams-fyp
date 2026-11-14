@@ -13,6 +13,11 @@ function(ssk_pipeline_warnings)
   endforeach()
 endfunction()
 
+add_library(ssk_corpus corpus.cpp)
+target_link_libraries(ssk_corpus PUBLIC ssk)
+target_include_directories(ssk_corpus PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+ssk_pipeline_warnings(ssk_corpus)
+
 add_subdirectory(simplify-sweep)
 add_subdirectory(frechet-distance)
 add_subdirectory(error-match)
