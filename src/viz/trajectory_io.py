@@ -6,12 +6,14 @@ Trajectory format (input)::
 
     {"dim": 2, "name": "spiral", "points": [[x, y], ...]}
 
-Result format (output of the `simplify` CLI)::
+Result format (what the pipelines write)::
 
     {"dim": 2, "algorithm": "...", "mode": "...",
-     "points": [...],            # the simplified curve, sigma
-     "input_points": [...],      # the original curve, tau
+     "points": [...],            # the simplified curve
      "params": {...}, "stats": {...}, "frechet": {...}}
+
+`plot.py` draws the original curve underneath when a document also has `input_points`; no
+pipeline writes that key, see docs/running.md.
 """
 
 from __future__ import annotations

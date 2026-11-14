@@ -30,12 +30,10 @@ def stats_caption(doc: dict) -> str:
     pr = doc.get("params", {})
     lines = [
         f"algorithm : {doc.get('algorithm', '?')}  ({doc.get('mode', '?')})",
-        f"eps / delta: {pr.get('eps', '?')} / {pr.get('delta', '?')}",
+        *(f"{key:11}: {value:.6g}" for key, value in pr.items()),
         f"input      : {st.get('input_size', '?')} points",
         f"output     : {st.get('output_size', '?')} points",
         f"compression: {st.get('compression', 0.0):.2f}x",
-        f"avg latency: {st.get('avg_latency_us_per_point', 0.0):.3f} us/point",
-        f"peak space : {st.get('peak_working_bytes', 0) / 1024.0:.1f} KB",
     ]
     fr = doc.get("frechet")
     if fr:
