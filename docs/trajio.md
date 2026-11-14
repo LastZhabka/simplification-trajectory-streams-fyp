@@ -199,7 +199,7 @@ src/trajio/
   sources/       geolife.py, mopsi.py, ngsim.py, mot.py, _csvio.py
 ```
 
-`_csvio.py` streams CSV out of `.zip`, `.gz` and `.zst` archives without unpacking them.
+`_csvio.py` streams the rows of a CSV, or of every CSV under a directory.
 
 ## Testing
 

@@ -63,7 +63,6 @@ def export(
     *,
     dims: int = 2,
     limit: int | None = None,
-    digits: int = 6,
 ) -> list[tuple[str, str, int, int]]:
     """Write one JSON file per track. Returns the index rows.
 
@@ -83,7 +82,7 @@ def export(
             continue
         n = len(index) + 1
         use_z = dims == 3 and track.has_z()
-        name = f"{source.name}-{n:0{digits}d}.json"
+        name = f"{source.name}-{n:06d}.json"
 
         times = track.times if track.has_time() else []
         _write_trajectory(
