@@ -10,6 +10,26 @@ them are measured in hours.
 
 ---
 
+## 0. Starting over
+
+No stage clears the directory it writes into, so a rerun onto an old tree mixes the two. Remove
+what you are about to regenerate. `data/error-matched` also holds the reports step 8 wrote and
+the shard logs; move those out first if you want them.
+
+```powershell
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue `
+  data\simplified-trajectories, data\frechet-distances, data\error-matched
+```
+
+```sh
+rm -rf data/simplified-trajectories data/frechet-distances data/error-matched
+```
+
+Steps 3 and 4 only need repeating if `data/downloads` or `data/trajectories` is gone or the
+export format changed; to redo step 4, empty each `data/trajectories/<dataset>` first. A
+`mopsi-sample` directory left there from earlier work is a subset of `mopsi`: delete it, or
+every loop below processes those 40 trajectories twice.
+
 ## 1. Toolchain
 
 A C++20 compiler and CMake 3.20+. Everything under `src/algo` and `src/pipelines` is standard
@@ -48,7 +68,7 @@ cmake --build build -j
 The generator is the only build difference: MinGW needs naming, the default works elsewhere.
 Use `-G Ninja` on either platform if you have it.
 
-63 tests, a few seconds. Run them before anything long — they cover the simplifiers against
+69 tests, a few seconds. Run them before anything long — they cover the simplifiers against
 their reference implementations, the Fréchet distance against three, and both pipelines'
 document formats.
 
@@ -186,87 +206,82 @@ change leaves the old files behind. Empty the directory first if the format has 
 ## 5. Simplify
 
 Every baseline, every trajectory, at `ceil(N / 2^m)` vertices for m = 1…6. Produces **786 642
-documents, about 9 GB**.
+documents, about 9 GB**. The eight smaller datasets first:
 
 ```powershell
-foreach ($ds in Get-ChildItem data\trajectories -Directory) {
+foreach ($ds in Get-ChildItem data\trajectories -Directory -Exclude geolife) {
   .\build\src\pipelines\simplify-sweep\ssk_simplify.exe --in $ds.FullName --out data\simplified-trajectories
 }
 ```
 
 ```sh
 for ds in data/trajectories/*/; do
+  [ "$(basename "$ds")" = geolife ] && continue
   ./build/src/pipelines/simplify-sweep/ssk_simplify --in "$ds" --out data/simplified-trajectories
 done
 ```
 
 **Budget 2–3 core-hours**, dominated entirely by DOTS' threshold search. Eight of the nine
 datasets take 4–36 minutes each. **GeoLife needs sharding** — a handful of its 60k-point
-tracks dominate the whole dataset, because DOTS' cost grows faster than linearly:
-
-```powershell
-0..7 | ForEach-Object -Parallel {
-  .\build\src\pipelines\simplify-sweep\ssk_simplify.exe --in data\trajectories\geolife `
-    --out data\simplified-trajectories --shard $_ --shards 8
-} -ThrottleLimit 8
-```
-
-```sh
-seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/simplify-sweep/ssk_simplify \
-  --in data/trajectories/geolife --out data/simplified-trajectories --shard {} --shards 8
-```
-
-`ForEach-Object -Parallel` needs PowerShell 7; on Windows PowerShell 5.1 use `Start-Job` in a
-loop instead. Why the shards stride rather than take blocks, and where that still goes wrong,
-is in [pipeline.md](pipeline.md).
+tracks dominate the whole dataset, because DOTS' cost grows faster than linearly.
 
 One trajectory is knowingly excluded from DOTS: **`geolife-013552` does not finish**, four
-attempts of 90+ CPU-minutes each. The sharded run above will sit on it forever, so stop that
-worker when the other seven have finished and give the file its own pass with `--no-dots`,
-which produces its Douglas–Peucker and SQUISH results in under a second. The driver takes a
-directory, so put the one file in one — named `geolife`, since the dataset name comes from the
-directory:
+attempts of 90+ CPU-minutes each. A worker that reaches it never moves on, so every trajectory
+behind it in that shard would go unsimplified. Take it out of the directory before the sharded
+run, give it its own pass with `--no-dots` — its Douglas–Peucker and SQUISH results take under
+a second — and put it back, because step 6 measures those two. The driver takes a directory,
+and the dataset name comes from the directory, so the one file goes in one named `geolife`:
 
 ```powershell
 mkdir -Force tmp\geolife | Out-Null
-Copy-Item data\trajectories\geolife\geolife-013552.json tmp\geolife\
+Move-Item data\trajectories\geolife\geolife-013552.json tmp\geolife\
+
+$procs = 0..7 | ForEach-Object {
+  Start-Process .\build\src\pipelines\simplify-sweep\ssk_simplify.exe -NoNewWindow -PassThru `
+    -ArgumentList "--in data\trajectories\geolife --out data\simplified-trajectories --shard $_ --shards 8"
+}
+$procs | Wait-Process
+
 .\build\src\pipelines\simplify-sweep\ssk_simplify.exe --in tmp\geolife `
     --out data\simplified-trajectories --no-dots
+Move-Item tmp\geolife\geolife-013552.json data\trajectories\geolife\
 Remove-Item -Recurse tmp
 ```
 
 ```sh
 mkdir -p tmp/geolife
-cp data/trajectories/geolife/geolife-013552.json tmp/geolife/
+mv data/trajectories/geolife/geolife-013552.json tmp/geolife/
+
+seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/simplify-sweep/ssk_simplify \
+  --in data/trajectories/geolife --out data/simplified-trajectories --shard {} --shards 8
+
 ./build/src/pipelines/simplify-sweep/ssk_simplify --in tmp/geolife \
     --out data/simplified-trajectories --no-dots
+mv tmp/geolife/geolife-013552.json data/trajectories/geolife/
 rm -r tmp
 ```
 
+`Start-Process` works on Windows PowerShell 5.1 and on 7. Why the shards stride rather than
+take blocks, and where that still goes wrong, is in [pipeline.md](pipeline.md).
+
+The sweep has no `--skip-existing`: if a dataset's run dies, run that dataset again.
+
 ### Bad documents cannot be produced
 
-`DotsSimplifier`'s path decode steps backwards on some real inputs — the defect is in the
-original implementation, and our port reproduces it faithfully — so a run can come back whose
-points are **not a subsequence of the input**, which makes it not a simplification of anything.
-It affected 1 034 documents of a corpus of 786 636 before it was caught, 96% of them at m1 and
-90% of them in NGSIM.
+Upstream's `DotsSimplifier` can join a point to a frontier vertex that comes after it, so its
+decoded path steps backwards and the points are **not a subsequence of the input**. That
+affected 1 034 documents of a corpus of 786 636 before it was caught, 96% of them at m1 and 90%
+of them in NGSIM. **Our port no longer does it** — the one place it departs from upstream's
+algorithm, described in [simplification.md](simplification.md).
 
-**The driver now refuses to write such a run.** Every run is checked for strictly increasing
-indices before it is serialised; a failing one is dropped, reported on stderr, and counted in
-the summary:
+The driver's guard stays regardless. Every run is checked for strictly increasing indices
+before it is serialised; a failing one is dropped, reported on stderr, and counted in the
+summary as `N runs dropped: indices not increasing, so not a subsequence`. With the fix that
+line should not appear, and if it does, it is a bug.
 
-```
-ngsim-us-101: 1 trajectories, 1762 points -> 17 documents in 0.2 s
-  1 runs dropped: indices not increasing, so not a subsequence
-```
-
-So a corpus produced by the current driver is clean by construction, and nothing needs cleaning
-up afterwards. What this costs is coverage rather than correctness: DOTS ends up with slightly
-fewer operating points than DPn and SQUISH, unevenly — 80.1% at m1 on `ngsim-us-101`, its worst
-cell. That gap has to be stated in any results table, and
-[comparison.md](comparison.md) says why.
-
-Both incidents are written up in `archive/`.
+DOTS results from before the fix are not comparable with new ones wherever the old code made
+a backwards link, so regenerate the DOTS tree rather than mixing the two. Both incidents are
+written up in `archive/`.
 
 ### Verifying a corpus you did not just produce
 
@@ -327,11 +342,11 @@ Then GeoLife, which is **77% of all the work** and has to be split within itself
 as one process would take five hours while seven cores idle:
 
 ```powershell
-0..7 | ForEach-Object -Parallel {
-  .\build\src\pipelines\frechet-distance\ssk_frechet.exe --in data\trajectories\geolife `
-    --simplified data\simplified-trajectories --out data\frechet-distances `
-    --shard $_ --shards 8
-} -ThrottleLimit 8
+$procs = 0..7 | ForEach-Object {
+  Start-Process .\build\src\pipelines\frechet-distance\ssk_frechet.exe -NoNewWindow -PassThru `
+    -ArgumentList "--in data\trajectories\geolife --simplified data\simplified-trajectories --out data\frechet-distances --shard $_ --shards 8"
+}
+$procs | Wait-Process
 ```
 
 ```sh
@@ -348,7 +363,9 @@ its own, the split has to be within GeoLife. `--shard` works here exactly as abo
 
 A whole-corpus pass runs for hours, so if one dies, add **`--skip-existing`** when restarting:
 a measurement is a pure function of the two documents it reads, so one already written need
-not be computed again.
+not be computed again. Every pipeline writes a document as `<name>.json.part` and renames it
+once it is whole, so a killed run never leaves a truncated document for `--skip-existing` to
+take as done. A leftover `.part` is harmless and can be deleted.
 
 Unlike the sweep, this cost is known in advance: cells are `n × m` exactly at a measured
 34.45 ns each, and the worst single trajectory in the corpus is 15 minutes on one core. Nothing
@@ -398,8 +415,36 @@ done 2>&1 | tee -a data/error-matched/$ds.log
 `Start-Process` works on PowerShell 5.1 and 7. Prefer it to `Start-Job` here: each job is a whole
 PowerShell host of about 70 MB, while `ssk_match` itself peaks at 7 MB.
 
-For the corpus, set the dataset to each directory of `data/trajectories` in turn, but skip
-`mopsi-sample`: it is a subset of `mopsi` and would be counted twice.
+For the corpus, wrap that in a loop over the datasets, one ε at a time so the cheap ones
+finish first:
+
+```powershell
+New-Item -ItemType Directory -Force data\error-matched | Out-Null
+foreach ($eps in "0.5", "0.3", "0.1") {
+  foreach ($ds in (Get-ChildItem data\trajectories -Directory).Name) {
+    $procs = 0..7 | ForEach-Object {
+      Start-Process .\build\src\pipelines\error-match\ssk_match.exe -NoNewWindow -PassThru `
+        -ArgumentList "--in data\trajectories\$ds --eps $eps --shard $_ --shards 8 --skip-existing" `
+        -RedirectStandardOutput "data\error-matched\$ds-eps$eps-shard$_.log"
+    }
+    $procs | Wait-Process
+  }
+}
+```
+
+```sh
+mkdir -p data/error-matched
+for eps in 0.5 0.3 0.1; do
+  for ds in data/trajectories/*/; do
+    ds=$(basename "$ds")
+    seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/error-match/ssk_match \
+      --in data/trajectories/$ds --eps $eps --shard {} --shards 8 --skip-existing \
+      2>&1 | tee -a data/error-matched/$ds.log
+  done
+done
+```
+
+It is resumable as a whole: run it again and finished trajectories are skipped.
 
 Each shard ends with:
 
@@ -633,7 +678,7 @@ What differs is only ever the shell:
 | run a binary | `.\build\...\ssk_simplify.exe` | `./build/.../ssk_simplify` |
 | download | `curl.exe` (bare `curl` is an alias) | `curl` |
 | loop over datasets | `foreach ($ds in Get-ChildItem ... -Directory)` | `for ds in data/trajectories/*/; do … done` |
-| run N shards at once | `ForEach-Object -Parallel` (PS 7), or `Start-Job` / `Start-Process` (5.1) | `xargs -P N` |
+| run N shards at once | `Start-Process ... -PassThru`, then `Wait-Process` | `xargs -P N` |
 | line continuation | backtick `` ` `` | backslash `\` |
 
 Two Windows-only annoyances worth knowing, neither of which affects the code: MinGW-built
