@@ -6,6 +6,7 @@
 #include "simplify/dots.hpp"
 #include "simplify/douglas_peucker.hpp"
 #include "simplify/squish.hpp"
+#include "simplify/squish_e.hpp"
 
 namespace ssk::pipelines {
 namespace {
@@ -62,6 +63,22 @@ Sweep sweep_squish(const Curve<2>& curve, const Context& in, int max_m) {
          target,
          {{"buffer_size", size}},
          simplify::Squish(Params{{"buffer_size", size}}).indices(curve, in),
+         1});
+  }
+  return sweep;
+}
+
+Sweep sweep_squish_e(const Curve<2>& curve, const Context& in, int max_m) {
+  Sweep sweep{"squish-e", {}};
+  int m = 0;
+  for (const std::size_t target : budget_targets(curve.size(), max_m, 3)) {
+    ++m;
+    const double ratio = std::pow(2.0, m);
+    sweep.runs.push_back(
+        {m,
+         target,
+         {{"cmp_ratio", ratio}, {"sed_error", 0.0}},
+         simplify::SquishE(Params{{"cmp_ratio", ratio}, {"sed_error", 0.0}}).indices(curve, in),
          1});
   }
   return sweep;

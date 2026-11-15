@@ -8,7 +8,8 @@
 
 namespace ssk::pipelines {
 
-inline const std::vector<std::string> kBaselines{"douglas-peucker-n", "squish", "dots"};
+inline const std::vector<std::string> kBaselines{"douglas-peucker-n", "squish", "squish-e",
+                                                 "dots"};
 
 std::string dataset_of(const std::string& dir);
 

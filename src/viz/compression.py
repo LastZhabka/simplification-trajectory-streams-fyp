@@ -27,8 +27,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 import matplotlib.ticker as ticker  # noqa: E402
 import numpy as np  # noqa: E402
 
-ALGORITHMS = ("douglas-peucker-n", "squish", "dots")
-SHORT = {"douglas-peucker-n": "DPn", "squish": "SQUISH", "dots": "DOTS"}
+ALGORITHMS = ("douglas-peucker-n", "squish", "squish-e", "dots")
+SHORT = {"douglas-peucker-n": "DPn", "squish": "SQUISH", "squish-e": "SQUISH-E",
+         "dots": "DOTS"}
 RATES = range(1, 7)
 # A bound under this many measurement tolerances (1e-9 x diagonal each) is below 1e-5 x the
 # diagonal: the stored verdicts there are unreliable, see the 2026-10-28 incident note.
@@ -91,7 +92,8 @@ def histograms(rows: list[dict], eps: float, out: Path) -> None:
     # Sized for the report form's 5 in cell, so one file serves the note and the report.
     plt.rcParams.update({"font.size": 6, "axes.titlesize": 6.5, "axes.labelsize": 6})
     cells = group(rows, "algorithm", "m")
-    fig, axes = plt.subplots(len(ALGORITHMS), len(RATES), figsize=(5.05, 3.9), facecolor=SURFACE)
+    fig, axes = plt.subplots(len(ALGORITHMS), len(RATES), figsize=(5.05, 1.3 * len(ALGORITHMS)),
+                             facecolor=SURFACE)
     for row, a in enumerate(ALGORITHMS):
         for col, m in enumerate(RATES):
             ax = axes[row][col]

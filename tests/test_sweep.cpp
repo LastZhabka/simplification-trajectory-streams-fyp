@@ -97,6 +97,23 @@ TEST("sweep/squish stays within every budget and stops at its floor") {
   CHECK_MSG(sweep.runs.back().target >= 5, "no run may ask for a budget of 4 or less");
 }
 
+TEST("sweep/squish-e stays within every budget and stops at its floor") {
+  for (const std::size_t n : {7u, 40u, 200u, 1000u}) {
+    const Curve<2> c = wander(n);
+    const Context in = uniform_time(c.size());
+    const Sweep sweep = ssk::pipelines::sweep_squish_e(c, in, 6);
+    check_runs(sweep, c, "squish-e");
+    CHECK(sweep.algorithm == "squish-e");
+    for (const Run& run : sweep.runs) {
+      CHECK_MSG(run.indices.size() <= run.target, "output must stay within the budget");
+      CHECK_MSG(run.params.front().first == "cmp_ratio" &&
+                    run.params.front().second == std::pow(2.0, run.m),
+                "the rate is the parameter");
+      CHECK_MSG(run.target >= 3, "the queue never holds fewer than 3 points");
+    }
+  }
+}
+
 TEST("sweep/dots searches its threshold to the budget") {
   const Curve<2> c = wander(200);
   const Context in = uniform_time(c.size());

@@ -24,8 +24,9 @@ from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from statistics import mean, median
 
-ALGORITHMS = ("douglas-peucker-n", "squish", "dots")
-SHORT = {"douglas-peucker-n": "DPn", "squish": "SQUISH", "dots": "DOTS"}
+ALGORITHMS = ("douglas-peucker-n", "squish", "squish-e", "dots")
+SHORT = {"douglas-peucker-n": "DPn", "squish": "SQUISH", "squish-e": "SQUISH-E",
+         "dots": "DOTS"}
 NOTES = (
     "DOTS reaches each budget by a search on its threshold: its rows describe the "
     "simplification, not an online algorithm.",

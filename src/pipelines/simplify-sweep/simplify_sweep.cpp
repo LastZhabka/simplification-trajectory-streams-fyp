@@ -1,12 +1,12 @@
-// Simplify every trajectory in a dataset directory with all three baselines, at a fixed
+// Simplify every trajectory in a dataset directory with all four baselines, at a fixed
 // compression rate of 1/2^m for m = 1..rates.
 //
 //   ssk_simplify --in data/trajectories/mopsi --out data/simplified-trajectories
 //
 // writes data/simplified-trajectories/<algorithm>/mopsi/m<rate>/<name>.json, one document per
 // trajectory per algorithm per rate. Each is a trajectory document -- points and their
-// timestamps -- with the result fields on top, so it reads and draws like any other. SQUISH
-// and DOTS need timestamps, so a document without a clock is simplified by DPn alone.
+// timestamps -- with the result fields on top, so it reads and draws like any other. SQUISH,
+// SQUISH-E and DOTS need timestamps, so a document without a clock is simplified by DPn alone.
 //
 // One dataset can be split across processes with `--shard I --shards N`, which is worth
 // doing on GeoLife: DOTS' cost grows faster than linearly, and a handful of 60k-point tracks
@@ -92,6 +92,7 @@ int main(int argc, char** argv) {
     std::vector<pipelines::Sweep> sweeps{pipelines::sweep_dpn(curve, opt.rates)};
     if (in.t.size() == curve.size()) {
       sweeps.push_back(pipelines::sweep_squish(curve, in, opt.rates));
+      sweeps.push_back(pipelines::sweep_squish_e(curve, in, opt.rates));
       if (opt.dots) {
         sweeps.push_back(pipelines::sweep_dots(curve, in, opt.rates));
       }

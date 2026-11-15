@@ -1,9 +1,9 @@
 // Driving the baselines to a fixed compression rate.
 //
 // For a trajectory of N points, rate M asks for ceil(N / 2^M) vertices. DPn and SQUISH take
-// that budget as their parameter and hit it exactly; DOTS bounds error rather than size, so
-// its threshold has to be searched for -- see sweep_dots. The protocol and what it is for are
-// in docs/comparison.md.
+// that budget as their parameter and hit it exactly; SQUISH-E takes the rate 2^M itself; DOTS
+// bounds error rather than size, so its threshold has to be searched for -- see sweep_dots.
+// The protocol and what it is for are in docs/comparison.md.
 //
 // A Sweep is one algorithm's whole set of rates for one trajectory. Each rate is written as
 // its own document: a trajectory document -- points, and the timestamps that go with them --
@@ -44,6 +44,11 @@ std::vector<std::size_t> budget_targets(std::size_t n, int max_m, std::size_t fl
 
 Sweep sweep_dpn(const Curve<2>& curve, int max_m);
 Sweep sweep_squish(const Curve<2>& curve, const Context& in, int max_m);
+
+// SQUISH-E(lambda = 2^m, mu = 0). Its queue holds 4 points plus one per lambda inputs and is
+// reduced whenever it fills, so it keeps at most max(3, (N - 1) / 2^m) points: within the
+// target from a target of 3 up, and usually a point or two under it.
+Sweep sweep_squish_e(const Curve<2>& curve, const Context& in, int max_m);
 Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m);
 
 // Whether the run's indices are strictly increasing, which is what makes its points a
