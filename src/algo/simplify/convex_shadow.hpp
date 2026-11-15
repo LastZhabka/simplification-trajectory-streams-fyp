@@ -19,12 +19,15 @@
 #include <string>
 
 #include "simplify/simplifier.hpp"
+#include "validate/validate.hpp"
 
 namespace ssk::simplify {
 
 class ConvexShadow : public Simplifier<2> {
  public:
-  explicit ConvexShadow(const Params& params);
+  // With a validator, every grid, shadow and emitted segment is checked as it is made and
+  // the outcome counted there. It costs time, so it is off unless one is given.
+  explicit ConvexShadow(const Params& params, validate::Validator* validator = nullptr);
 
   [[nodiscard]] std::string name() const override { return "convex-shadow"; }
 
@@ -34,6 +37,7 @@ class ConvexShadow : public Simplifier<2> {
  private:
   double delta_;
   double eps_;
+  validate::Validator* validator_;
 };
 
 }  // namespace ssk::simplify

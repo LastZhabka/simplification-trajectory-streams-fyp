@@ -6,6 +6,7 @@ add_executable(ssk_tests
   test_frechet.cpp
   test_measure.cpp
   test_audit.cpp
+  test_validate.cpp
 )
 target_link_libraries(ssk_tests PRIVATE ssk ssk_sweep ssk_measure ssk_audit_lib)
 target_include_directories(ssk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

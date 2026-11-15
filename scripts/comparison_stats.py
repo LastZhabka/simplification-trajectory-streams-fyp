@@ -40,15 +40,23 @@ NOTES = (
 def read(path):
     with open(path, encoding="utf-8") as f:
         doc = json.load(f)
-    return [{"dataset": doc["dataset"], "source": doc["source"], "n": doc["input_size"],
-             "eps": doc["eps"], **pair} for pair in doc["pairs"]]
+    pairs = [{"dataset": doc["dataset"], "source": doc["source"], "n": doc["input_size"],
+              "eps": doc["eps"], **pair} for pair in doc["pairs"]]
+    return pairs, doc["eps"], doc.get("validation")
 
 
 def load(root, jobs):
     # One small file per trajectory per eps, so reading is the cost; spread it over processes.
     paths = sorted(glob.glob(os.path.join(root, "eps*", "summary", "*", "*.json")))
+    pairs = []
+    validation = defaultdict(lambda: defaultdict(lambda: {"checked": 0, "failed": 0}))
     with ProcessPoolExecutor(jobs) as pool:
-        return [pair for pairs in pool.map(read, paths, chunksize=256) for pair in pairs]
+        for rows, eps, validated in pool.map(read, paths, chunksize=256):
+            pairs += rows
+            for check, count in (validated or {}).get("checks", {}).items():
+                validation[eps][check]["checked"] += count["checked"]
+                validation[eps][check]["failed"] += count["failed"]
+    return pairs, {eps: dict(checks) for eps, checks in sorted(validation.items())}
 
 
 def group(rows, *keys):
@@ -154,13 +162,14 @@ def main():
                         help="processes reading summaries, default one per core")
     args = parser.parse_args()
 
-    pairs = load(args.matched, args.jobs)
+    pairs, validation = load(args.matched, args.jobs)
     if not pairs:
         sys.exit(f"no summaries under {args.matched}/eps*/summary/ -- run ssk_match first")
     # Each baseline operating point appears once per eps; it is one operating point.
     base = list({(p["source"], p["algorithm"], p["m"]): p for p in pairs}.values())
     eps_values = sorted({p["eps"] for p in pairs})
-    report = {"datasets": {}, "pooled": {}, "bounds": bounds(pairs, base), "notes": NOTES}
+    report = {"datasets": {}, "pooled": {}, "bounds": bounds(pairs, base),
+              "validation": validation, "notes": NOTES}
 
     for (dataset,), rows in sorted(group(base, "dataset").items()):
         ours = [p for p in pairs if p["dataset"] == dataset]
@@ -221,6 +230,13 @@ def main():
                  for eps, b in report["bounds"].items()]))
     print("\nkappa is only bounded from above here, so passing the size check does not prove "
           "the bound; failing it does break it.")
+
+    if validation:
+        print("\n## Validation: the algorithm's invariants, checked as it ran\n")
+        print(table(["eps", "check", "checked", "failed"],
+                    [[eps, check, count["checked"], count["failed"]]
+                     for eps, checks in validation.items() for check, count in checks.items()]))
+        print("\nOnly runs made with `ssk_match --validate` are counted.")
 
     print("\n## Notes\n")
     for note in NOTES:

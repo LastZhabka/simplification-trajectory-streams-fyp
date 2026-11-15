@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -13,12 +14,8 @@ namespace {
 
 constexpr double kPi = 3.14159265358979323846;
 
-struct Vec {
-  double x = 0.0;
-  double y = 0.0;
-
-  bool operator==(const Vec&) const = default;
-};
+using validate::Polygon;
+using validate::Vec;
 
 Vec operator+(Vec a, Vec b) { return {a.x + b.x, a.y + b.y}; }
 Vec operator-(Vec a, Vec b) { return {a.x - b.x, a.y - b.y}; }
@@ -27,8 +24,6 @@ double dot(Vec a, Vec b) { return a.x * b.x + a.y * b.y; }
 double cross(Vec a, Vec b) { return a.x * b.y - a.y * b.x; }
 double norm(Vec a) { return std::sqrt(dot(a, a)); }
 double dist2(Vec a, Vec b) { return dot(a - b, a - b); }
-
-using Polygon = std::vector<Vec>;
 
 struct Candidate {
   Vec p;
@@ -194,7 +189,7 @@ std::vector<Candidate> start(Vec v, const Polygon& starts) {
 
 // S[p] <- conv(G_v) ∩ F(S[p], p), which is all of conv(G_v) once p is in S[p].
 std::vector<Candidate> advance(const std::vector<Candidate>& cands, Vec v,
-                               const Polygon& cells, double r) {
+                               const Polygon& cells, double r, validate::Validator* validator) {
   Polygon around;
   for (const Vec o : cells) {
     around.push_back(v + o);
@@ -205,6 +200,9 @@ std::vector<Candidate> advance(const std::vector<Candidate>& cands, Vec v,
     // Under three vertices is a tangency, which cover() would widen to a whole line. Lemma 2's
     // witness stabs balls strictly inside conv(G_v), so its shadow always has area.
     if (next.size() >= 3) {
+      if (validator != nullptr) {
+        validator->shadow(next, around, c.p, c.shadow);
+      }
       out.push_back({c.p, std::move(next)});
     }
   }
@@ -218,18 +216,24 @@ void emit(Curve<2>& out, Vec q) {
   }
 }
 
-void emit_segment(Curve<2>& out, const std::vector<Candidate>& cands, Vec first, Vec last) {
+void emit_segment(Curve<2>& out, const std::vector<Candidate>& cands,
+                  std::span<const Vec> stabbed, double r, validate::Validator* validator) {
+  const Vec first = stabbed.front();
   const Candidate& best = *std::min_element(
       cands.begin(), cands.end(),
       [first](const Candidate& a, const Candidate& b) { return dist2(a.p, first) < dist2(b.p, first); });
+  const Vec end = closest(best.shadow, stabbed.back());
+  if (validator != nullptr) {
+    validator->segment(best.p, end, stabbed, r);
+  }
   emit(out, best.p);
-  emit(out, closest(best.shadow, last));
+  emit(out, end);
 }
 
 }  // namespace
 
-ConvexShadow::ConvexShadow(const Params& params)
-    : delta_(params.get("delta")), eps_(params.get("eps", 0.1)) {
+ConvexShadow::ConvexShadow(const Params& params, validate::Validator* validator)
+    : delta_(params.get("delta")), eps_(params.get("eps", 0.1)), validator_(validator) {
   if (delta_ <= 0.0) {
     throw std::runtime_error("convex-shadow: delta must be positive");
   }
@@ -251,8 +255,12 @@ Curve<2> ConvexShadow::run(const Curve<2>& curve, const Context&) const {
   }
   const double h = eps_ * delta / (2.0 * std::sqrt(2.0));
   const double r = (1.0 + eps_) * delta;
-  const Polygon starts = boundary_points(h, (1.0 + eps_ / 2.0) * delta);
+  const double rho = (1.0 + eps_ / 2.0) * delta;
+  const Polygon starts = boundary_points(h, rho);
   const Polygon cells = hull(starts);
+  if (validator_ != nullptr) {
+    validator_->grid(starts, cells, rho, r);
+  }
 
   // The grid moves with each vertex, so working relative to the first one changes nothing
   // but the rounding: coordinates near zero keep more of delta's digits.
@@ -266,9 +274,9 @@ Curve<2> ConvexShadow::run(const Curve<2>& curve, const Context&) const {
   std::size_t first = 0;
   std::vector<Candidate> cands = start(vertices[0], starts);
   for (std::size_t i = 1; i < vertices.size(); ++i) {
-    std::vector<Candidate> next = advance(cands, vertices[i], cells, r);
+    std::vector<Candidate> next = advance(cands, vertices[i], cells, r, validator_);
     if (next.empty()) {
-      emit_segment(out, cands, vertices[first], vertices[i - 1]);
+      emit_segment(out, cands, std::span(vertices).subspan(first, i - first), r, validator_);
       first = i;
       next = start(vertices[i], starts);
     }
@@ -277,7 +285,7 @@ Curve<2> ConvexShadow::run(const Curve<2>& curve, const Context&) const {
   if (first + 1 == vertices.size()) {
     emit(out, vertices.back());
   } else {
-    emit_segment(out, cands, vertices[first], vertices.back());
+    emit_segment(out, cands, std::span(vertices).subspan(first), r, validator_);
   }
 
   for (Point<2>& q : out) {

@@ -253,6 +253,7 @@ one small file per trajectory instead of every result.
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process every Nth trajectory, starting at I |
 | `--skip-existing` | off | skip a trajectory whose summary exists |
+| `--validate` | off | check the algorithm's invariants as it runs and count the outcomes, §8; about 1.8× the time |
 
 **It checks the guarantee as it goes.** Every run also takes the exact decision
 `Frechet::within(input, ours, (1+ε)·delta)`, with no tolerance, which costs about a ninth of the
@@ -312,7 +313,7 @@ The script uses the standard library only, so it needs no venv. It reads every
 **Per dataset:**
 
 - **coverage**: trajectories in each (rate, baseline) cell, and our matches beside them. This
-  is the per-cell count comparison.md asks for, which shows where DOTS is missing;
+  is the per-cell count comparison.md asks for, which shows where a baseline is missing;
 - **fixed rate**: each baseline's median measured error at `N/2^m`, which is the headline
   table, plus how often DOTS hit its budget exactly and how many runs its search took;
 - **matched**, per ε: for each (baseline, m),
@@ -423,7 +424,54 @@ roughly 4–5 GB per ε. That is an estimate from the sample.
   in 2 006 runs: the calibration samples of all nine datasets at ε = 0.5 and 0.3, plus 3
   trajectories each of `mot-dancetrack`, `mopsi` and `ngsim-us-101` at ε = 0.5. `viz/plot.py`
   draws a result document and reports the check.
-- **Not done:** there are no unit tests for `ConvexShadow` or `ssk_match` in `tests/`.
+- **Not done:** there are no unit tests for `ssk_match` in `tests/`.
+
+### Validation while it runs
+
+`src/algo/validate/` checks the invariants the guarantee rests on, as `ConvexShadow` produces
+the objects they are about. `ssk_match --validate` turns it on. It is off by default: a
+validated run takes about 1.8× as long (10.2 s against 18.3 s on 12 Mopsi trajectories at
+ε = 0.5).
+
+| check | when | what must hold |
+|---|---|---|
+| `grid_hull` | once per run | `conv(G_v)` is convex, counter-clockwise, contains every boundary grid point, and has only grid points as vertices |
+| `grid_covers_ball` | once per run | it contains the ball of radius `(1+ε/2)δ`, so Lemma 2's witness fits inside |
+| `grid_inside_disk` | once per run | it lies in the disk of radius `(1+ε)δ`, which is the error bound |
+| `shadow_convex` | per candidate per vertex | the new `S[p]` is convex and counter-clockwise |
+| `shadow_inside_grid` | per candidate per vertex | it lies in `conv(G_v)` of the vertex just read |
+| `shadow_behind` | per candidate per vertex | every vertex of it is seen from `p` through the previous `S[p]` |
+| `segment_stabs` | per output segment | the segment meets the disk of radius `(1+ε)δ` of every input vertex it replaces, in order |
+
+**A failure is counted, not thrown.** A corpus run is hundreds of core-hours, and what is worth
+finding is a few rounding cases among billions of checks; stopping at the first would hide how
+many there are and where. The counts go where the results go:
+
+- each result document gets `"validation": {"checked", "failed", "checks": {<name>: {"checked",
+  "failed"}}}`;
+- each trajectory's summary gets the same, summed over its matches;
+- `ssk_match` prints the totals per check when it ends;
+- `scripts/comparison_stats.py` prints a *Validation* table per ε and writes it to its JSON.
+
+A run made without `--validate` has no `validation` key anywhere, so it is never reported as
+zero failures.
+
+**What a failure means.** The checks use their own predicates, not the algorithm's, with a
+relative slack of 1e-9, and they skip an edge shorter than 1e-9 of the distances around it:
+clipping leaves edges a few ulps long whose direction is rounding noise. So a failure is a
+disagreement beyond rounding between the algorithm and an independent test of the same
+property. `segment_stabs` is the one that states the guarantee directly; the others say where
+it broke. The exact Fréchet decision `within_bound` is still the final word on the output.
+
+**Measured so far**, at ε = 0.5: 0 failures in 5 611 890 checks on 12 Mopsi trajectories (246
+matches) and 0 in 21 706 918 on 5 GeoLife trajectories (112 matches). The first version of
+the checks reported 13 `shadow_behind` failures on the Mopsi sample; every one touched the
+previous shadow exactly and was the check believing an edge 1e-20 long, which is why such
+edges are now skipped.
+
+**Not checked:** that a shadow is *all* of `F ∩ conv(G_v)`, only that it lies in it. A shadow
+that is too small costs vertices, never the error bound, and Theorem 3's size bound is checked
+by the stats script instead.
 
 ## 9. Open concerns
 
