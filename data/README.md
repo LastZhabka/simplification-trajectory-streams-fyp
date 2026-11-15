@@ -1,15 +1,21 @@
 # data/
 
-Everything the project reads or writes that is not source. All four subdirectories are
+Everything the project reads or writes that is not source. Every subdirectory is
 git-ignored — the downloads are gigabytes and mostly redistributable only under their own
 licences, and the rest is regenerable from them.
 
 ```
-downloads/       the datasets exactly as fetched, in their own formats   -- see its README
-trajectories/    those datasets converted to our format, by trajio
-synthetic/       generated test curves, by src/viz/generate.py
-renders/         images, by src/viz/plot.py
+downloads/                the datasets exactly as fetched, in their own formats   -- see its README
+trajectories/             those datasets converted to our format, by trajio
+simplified-trajectories/  every baseline at every compression rate, by ssk_simplify
+frechet-distances/        the measured error of each of those, by ssk_frechet
+error-matched/            ours at each baseline's error, and the summaries, by ssk_match
+synthetic/                generated test curves, by src/viz/generate.py
+renders/                  images, by src/viz/plot.py
 ```
+
+The three result trees are produced in that order, each from the one before; the commands and
+what they cost are in [`../docs/running.md`](../docs/running.md).
 
 `downloads/` is the only one that cannot be reproduced by running something locally, and
 the only one with content worth reading before use. Everything else is output.
@@ -46,9 +52,10 @@ in this repository: one JSON document per curve.
 Read it with `ssk::io::read_trajectory_file` (C++, `src/algo/io/trajectory.hpp`) or
 `trajectory_io.load` (Python, `src/viz/`).
 
-A *result* document — what a simplification run writes — is the same document plus
-`algorithm`, `mode`, `params`, `stats`, `input_points` (the original curve, with `points`
-now the simplified one) and, when checked, `frechet`. `src/viz/plot.py` renders either.
+A *result* document — what a simplification run writes — is the same document, its `points`
+now the simplified ones, plus `algorithm`, `mode`, `params`, `stats` and `source`, which names
+the input rather than repeating it. A measured one adds `frechet`, and a validated run of ours
+adds `validation`. `src/viz/plot.py` renders either.
 
 ## Refilling it
 

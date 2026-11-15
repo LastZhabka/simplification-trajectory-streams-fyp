@@ -68,7 +68,7 @@ cmake --build build -j
 The generator is the only build difference: MinGW needs naming, the default works elsewhere.
 Use `-G Ninja` on either platform if you have it.
 
-69 tests, a few seconds. Run them before anything long — they cover the simplifiers against
+79 tests, a few seconds. Run them before anything long — they cover the simplifiers against
 their reference implementations, the Fréchet distance against three, and both pipelines'
 document formats.
 
@@ -205,8 +205,9 @@ change leaves the old files behind. Empty the directory first if the format has 
 
 ## 5. Simplify
 
-Every baseline, every trajectory, at `ceil(N / 2^m)` vertices for m = 1…6. Produces **786 642
-documents, about 9 GB**. The eight smaller datasets first:
+Every baseline — DPn, SQUISH, SQUISH-E and DOTS — on every trajectory, at `ceil(N / 2^m)`
+vertices for m = 1…6. The three without SQUISH-E produced **786 642 documents, about 9 GB**;
+with it, expect roughly a third more. The eight smaller datasets first:
 
 ```powershell
 foreach ($ds in Get-ChildItem data\trajectories -Directory -Exclude geolife) {
@@ -228,8 +229,8 @@ tracks dominate the whole dataset, because DOTS' cost grows faster than linearly
 One trajectory is knowingly excluded from DOTS: **`geolife-013552` does not finish**, four
 attempts of 90+ CPU-minutes each. A worker that reaches it never moves on, so every trajectory
 behind it in that shard would go unsimplified. Take it out of the directory before the sharded
-run, give it its own pass with `--no-dots` — its Douglas–Peucker and SQUISH results take under
-a second — and put it back, because step 6 measures those two. The driver takes a directory,
+run, give it its own pass with `--no-dots` — its other three baselines take seconds — and
+put it back, because step 6 measures those three. The driver takes a directory,
 and the dataset name comes from the directory, so the one file goes in one named `geolife`:
 
 ```powershell
@@ -472,6 +473,11 @@ first.
 
 On disk, each ε of `mot-dancetrack` is 13 027 files and 55 MB: one result per baseline
 document plus one summary per trajectory.
+
+**Validating.** Add `--validate` to the argument list to have the algorithm's invariants
+checked as it runs, at about 1.8× the time. Each shard's log then ends with a count per check,
+and step 8's script prints them pooled. What is checked is in [algorithm.md](algorithm.md) §8.
+Every `failed` count should be 0.
 
 **Resuming.** The summary is written last, so a trajectory that has one is finished. Rerunning
 the same command (`--skip-existing` is already in it) picks up where it stopped, losing at most

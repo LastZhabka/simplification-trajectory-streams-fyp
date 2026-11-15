@@ -34,9 +34,19 @@ of the **point-count variant (DPn)**, which takes a vertex budget rather than a 
 compression.* COM.Geo 2011. The dots repository implements plain SQUISH, not SQUISH-E, so
 there is no error parameter — its knob is a point budget.
 
+**Muckell, Olsen, Hwang, Lawson & Ravi.** *Compression of trajectory data: a comprehensive
+evaluation and new approach.* GeoInformatica 18(3), 2014. SQUISH-E(λ, μ): a compression-ratio
+bound and an SED error bound on the same priority queue.
+
+**Zhang, Ding, Chen, Li, Chen & Shen.** *Trajectory simplification: an experimental study and
+quality analysis.* PVLDB 11(9), 2018. The study whose code, `uestc-db/traj-compression`, the
+SQUISH-E port comes from. That repository also carries a copy of the dots repository.
+
 **Cao & Li.** *DOTS: An online and near-optimal trajectory simplification algorithm.* Journal
-of Systems and Software 126, 2017. Note the defect found in the reference implementation,
-recorded in `archive/[2026-08-16] Incident - DOTS emits non-monotone indices.md`.
+of Systems and Software 126, 2017. The reference implementation can join a point to a vertex
+that comes after it and return indices out of order; the port does not, which is its one
+change to an upstream algorithm. See [simplification.md](simplification.md) and
+`archive/[2026-08-16] Incident - DOTS emits non-monotone indices.md`.
 
 **Alt & Godau.** *Computing the Fréchet distance between two polygonal curves.* International
 Journal of Computational Geometry & Applications 5, 1995. The free-space diagram, which is

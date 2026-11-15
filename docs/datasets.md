@@ -402,7 +402,8 @@ of `mot-mot17`, and 72% and 20% of `ngsim-peachtree`. **175 trajectories across 
 `ngsim-lankershim` (69), `ngsim-peachtree` (60) and `mot-mot17` (39).
 
 Those two rules predict the size of a full sweep exactly. Summing the qualifying rates per
-trajectory over all three algorithms gives **786 642 result documents**, and every completed
+trajectory over DPn, SQUISH and DOTS gives **786 642 result documents** (SQUISH-E, added
+since, is not in that count), and every completed
 dataset has matched its prediction to the document: 114 029 for `mopsi`, 99 281 for
 `ngsim-lankershim`, 66 512 for `ngsim-peachtree`, 54 007 for `ngsim-i-80`, 51 244 for
 `ngsim-us-101`, 39 783 for `mot-mot20`, 33 831 for `mot-mot17`, 12 335 for `mot-dancetrack`.

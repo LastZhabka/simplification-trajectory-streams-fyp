@@ -6,7 +6,7 @@ Why the experiments fix a compression rate, what that buys, and what it costs.
 
 This project builds a streaming simplifier that takes a bound `delta` and returns a
 simplification within that Fréchet distance of the input. To claim it is any good, it has to
-be put beside the three algorithms everyone else uses — Douglas–Peucker, SQUISH and DOTS,
+be put beside the algorithms everyone else uses — Douglas–Peucker, SQUISH, SQUISH-E and DOTS,
 ported in `src/algo/simplify/` — on 47 916 real trajectories from four datasets.
 
 The experiment that does it, in one paragraph: **take every trajectory, simplify it with each
@@ -34,6 +34,7 @@ kind of parameter:
 | ours | `delta` | coordinate units | Fréchet distance to the input |
 | Douglas–Peucker (DPn) | `count` | vertices | output size |
 | SQUISH | `buffer_size` | vertices | output size |
+| SQUISH-E | `cmp_ratio`, `sed_error` | a ratio; coordinate units | compression ratio; SED |
 | DOTS | `lssd_threshold` | units²·points | summed squared SED along a shortcut |
 
 There is no setting at which they are "run the same way". Worse, three of the four units
@@ -56,7 +57,8 @@ one of the two and measures the other.
 ## The protocol
 
 **1. K-simplification.** Run each baseline at a fixed budget of `N / 2^M` vertices, for
-M = 1…6. DPn and SQUISH take a budget natively and hit it exactly; DOTS has no budget knob and
+M = 1…6. DPn and SQUISH take a budget natively and hit it exactly; SQUISH-E takes the rate
+itself and lands a point or two under the budget; DOTS has no budget knob and
 needs a search on its threshold (99.3% of budgets exact, worst miss 0.4% under). The mechanics
 are in *How each baseline is driven to the budget* below.
 
@@ -102,7 +104,7 @@ objective, which they never agreed to. It is the right primary metric — it is 
 algorithm guarantees — but the SED-based pair should be scored under SED too, or the result
 reads as a rigged race.
 
-**Compare like with like on the output.** All three baselines return a subsequence of the
+**Compare like with like on the output.** All four baselines return a subsequence of the
 input. If our simplification may place vertices that are not input points, it is solving a
 strictly easier size problem, and that belongs in the caption rather than in a footnote.
 
@@ -110,20 +112,24 @@ strictly easier size problem, and that belongs in the caption rather than in a f
 online property that is the entire point of the algorithm. A table that mixes it with the
 streaming algorithms without saying so is claiming something false.
 
-**And say where a baseline is missing.** DOTS holds 271 190 of the 272 230 operating points it
-should, and the shortfall is entirely its own — DPn and SQUISH are complete.
+**And say where a baseline is missing.** A per-cell trajectory count belongs in any table that
+puts the baselines side by side, because they do not cover the same cells:
 
-Two causes. `geolife-013552` is excluded outright because its budget search does not finish in
-reasonable time, while DPn and SQUISH handle it in under a second. And **1 034 of its results
-were removed** after a full-corpus audit found them not to be subsequences of their inputs, a
-defect reproduced in the original `DotsSimplifier` — see
-`archive/[2026-08-16] Incident - 1034 corpus documents removed.md`.
+- **The floors differ.** A rate is run only when its budget is at least 2 vertices for DPn and
+  DOTS, 3 for SQUISH-E and 5 for SQUISH, so short trajectories drop out of the deep rates for
+  some baselines and not others.
+- **`geolife-013552` has no DOTS results.** Its budget search does not finish in reasonable
+  time, while the other baselines handle it in seconds.
+- **DOTS misses some budgets** and lands under them; the achieved count is recorded next to
+  the target.
 
-The shortfall is 0.38% overall but **19.9% in its worst cell**: at m1 on `ngsim-us-101`, DOTS
-covers 2 280 of 2 847 trajectories against 2 847 for the other two. Any error averaged over
-that cell is averaged over a fifth fewer trajectories for DOTS, and the missing fifth is not
-random — it is where the decode misbehaved. A per-cell trajectory count belongs in any table
-that puts the three side by side.
+*The first corpus had a fourth cause, now gone.* 1 034 DOTS results were removed after a
+full-corpus audit found them not to be subsequences of their inputs — a defect in the original
+`DotsSimplifier` that the port reproduced. DOTS then held 271 190 of its 272 230 operating
+points, a shortfall of 0.38% overall but 19.9% in its worst cell (m1 on `ngsim-us-101`), and
+not a random fifth: it was where the decode misbehaved. The port no longer does this
+([simplification.md](simplification.md), the second deviation), so a corpus from the current
+build should have no such gap. Results from before the fix should not be mixed with new ones.
 
 ## Other protocols, and why this one
 
@@ -131,7 +137,7 @@ Fixing the rate is one of five defensible choices:
 
 | protocol | search needed | gives |
 |---|---|---|
-| fix compression, compare error | exact budgets: DPn, SQUISH ✓, DOTS ✗ | one column per rate |
+| fix compression, compare error | exact budgets: DPn, SQUISH ✓; SQUISH-E a point under; DOTS ✗ | one column per rate |
 | fix error, compare compression | search for *every* baseline | one column per δ |
 | **error-matched pairing** (above) | none, except DOTS' budget | direct "same error, smaller output" |
 | **rate–distortion curves** | none at all | both readings at once |
@@ -174,6 +180,16 @@ output is what survives in the buffer. Measured 138/138 exact. One constraint fr
 `buffer_size > 4` — so M is capped at the largest value with `N / 2^M > 4`, and short
 trajectories drop out of the deeper rates.
 
+**SQUISH-E — set `cmp_ratio = 2^M`, `sed_error = 0`. One run, at or just under the budget.**
+Its ratio parameter is the rate itself, so nothing is derived from N. The queue holds 4 points
+plus one per `cmp_ratio` inputs and is reduced whenever it fills, so it keeps at most
+`max(3, (N − 1) / 2^M)` points: never over the budget, and usually one under. Over 603
+documents from 120 Mopsi, DanceTrack and GeoLife trajectories, none is over its target, 38 are
+exact, 564 are one under, and the furthest is three under. With `sed_error = 0` the
+error-bounded phase removes only points whose priority is exactly zero. The floor is a budget
+of 3, since the queue never holds fewer than 3 points. Record the achieved count next to the
+target, as for DOTS.
+
 **DOTS — search `lssd_threshold`. 6.1 runs per budget.** The only one with no budget knob. Its
 threshold bounds error, not size, so the size it produces has to be searched for. Three things
 make that affordable:
@@ -193,8 +209,8 @@ because the count only changes at thresholds where a shortcut becomes legal and 
 two counts are adjacent across one such step. Record the achieved count next to the target —
 it is not always the target.
 
-**Two floors apply to all three.** A budget below 2 is meaningless, since both endpoints are
-always kept, and below 5 for SQUISH. When a rate falls under its floor, the trajectory
+**Floors apply to all four.** A budget below 2 is meaningless, since both endpoints are
+always kept, below 3 for SQUISH-E, and below 5 for SQUISH. When a rate falls under its floor, the trajectory
 contributes no row at that rate rather than a clamped one — clamping would silently mix rates
 within a column.
 

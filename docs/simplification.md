@@ -1,7 +1,9 @@
 # Simplification algorithms
 
-Three baselines to compare a Fréchet-bounded streaming simplifier against, ported from their
-reference implementations behind one interface: **Douglas–Peucker**, **SQUISH** and **DOTS**.
+Four baselines to compare a Fréchet-bounded streaming simplifier against, ported from their
+reference implementations behind one interface: **Douglas–Peucker**, **SQUISH**, **SQUISH-E**
+and **DOTS**. Our own algorithm implements the same interface and is described in
+[algorithm.md](algorithm.md).
 
 Everything lives in `src/algo/simplify/` and builds into `ssk` with no new dependencies.
 
@@ -54,7 +56,7 @@ failing at run time.
 
 **`simplify` returns points, because that is all every algorithm can promise.** A min-# or
 optimal-placement method may emit vertices that appear nowhere in the input, so points are
-the only universal output. All three algorithms ported here happen to pick a *subsequence*,
+the only universal output. All four algorithms ported here happen to pick a *subsequence*,
 which is worth more — positions keep the link back to the source record and its timestamp,
 and make the correspondence an error measure needs explicit — so they derive from
 `SubsetSimplifier` and additionally offer `indices`. Code that needs points takes a
@@ -136,7 +138,7 @@ seven algorithms in psimpl, and the error-estimation helpers.
 
 *Why psimpl and not the dots repo's own DP:* `DouglasPeuckerBatchSimplifier::simplifyByIndex(
 x, y, out, minimumDistance)` is fixed at 2D and needs Qt. psimpl is header-only, dependency
-free and n-dimensional, so it is the only one of the three baselines that can be compared
+free and n-dimensional, so it is the only one of the baselines that can be compared
 against a k-d simplifier. psimpl is also pure geometry — it has no notion of a trajectory,
 so unlike the dots repo it applies no projection, normalisation or time handling of its own.
 
@@ -183,7 +185,8 @@ Both are required. `cmp_ratio = 1, sed_error = μ` is the error-bounded form, an
 `#include`) and run beside the port on the same doubles: 551 trajectories from all nine
 datasets, 7 values of `cmp_ratio` by 9 of `sed_error`, **34 713 runs, 0 mismatches** in the
 kept indices. On upstream's bundled `20081023025304-0.plt` both keep 181 points at (5, 0) and
-264 at (1, 0.0001), the sizes of the two outputs upstream ships. It is not part of the sweep.
+264 at (1, 0.0001), the sizes of the two outputs upstream ships. The sweep runs it at `cmp_ratio = 2^M`,
+`sed_error = 0`; see [comparison.md](comparison.md).
 
 ### DOTS — [caoweiquan322/dots](https://github.com/caoweiquan322/dots), `DotsSimplifier`
 
@@ -250,12 +253,13 @@ axis across these four algorithms, because their knobs are in incomparable units
 in degrees, a point count, and a squared distance summed over points. Fixing the output size
 and comparing error is the comparison; fixing a "tolerance" is not one.
 
-Two of the three baselines take a budget directly, and DPn is now one of them:
+Two of the four baselines take a budget directly, and DPn is now one of them:
 
 | | reaching `N / 2^M` | exact | cost |
 |---|---|---|---|
 | Douglas–Peucker (DPn) | set `count` | always | one run |
 | SQUISH | set `buffer_size` | always, while `> 4` | one run |
+| SQUISH-E | set `cmp_ratio = 2^M`, `sed_error = 0` | never over; usually one under | one run |
 | DOTS | bisect `lssd_threshold` | 99.3% of budgets, worst miss 0.4% under | ~11 runs |
 
 Measured over 60 Mopsi trajectories, M = 1…6: DPn returns exactly `count` points on every
@@ -430,12 +434,14 @@ Two checks go past matching upstream, to what the papers claim:
 
 ## Tests
 
-`tests/test_simplify.cpp`, 19 cases. Every algorithm is checked against the shared contract —
+`tests/test_simplify.cpp`, 24 cases. Every algorithm is checked against the shared contract —
 endpoints kept, output a strictly increasing subsequence of valid indices, monotone in its
 parameter — plus what is specific to each: DPn returning exactly `count` points, nesting its
 simplifications as the budget grows, copying a curve through when the budget cannot bind, and
-running in 3D; SQUISH respecting its budget and rejecting `buffer_size <= 4`; DOTS accepting
-epoch-ms through `indices` while `feed` still rejects it; and both SED algorithms refusing to
+running in 3D; SQUISH respecting its budget and rejecting `buffer_size <= 4`; SQUISH-E keeping
+about one point in `cmp_ratio`, dropping more as `sed_error` grows and rejecting a ratio below
+1; DOTS accepting epoch-ms through `indices` while `feed` still rejects it, and never joining a
+point to a later vertex; and both SED algorithms refusing to
 run without a clock.
 
 Two cases cover the interface itself: a toy `Midpoints` algorithm that emits vertices found
@@ -446,6 +452,7 @@ names.
 One case is the regression net for the section above: *all reproduce the upstream reference
 output* holds the indices psimpl, `SquishBatchSimplifier` and `DotsSimplifier` produce on a
 fixed 40-point curve, at two parameter values each. Its coordinates are sixteenths so they
-are exact doubles, and it fails the moment a port drifts.
+are exact doubles, and it fails the moment a port drifts. *squish-e reproduces the upstream
+reference output* does the same for `SQUISH_E.cpp`, at three settings.
 
 Run: `./build/tests/ssk_tests simplify`

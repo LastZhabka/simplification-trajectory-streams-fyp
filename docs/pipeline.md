@@ -35,7 +35,7 @@ on disk is always a whole one. What the experiment is *for* is
 | `--rates N` | 6 | deepest compression rate, `1/2^N` |
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process only every Nth trajectory, starting at I |
-| `--no-dots` | off | run DPn and SQUISH only — see *The one trajectory DOTS does not cover* |
+| `--no-dots` | off | run DPn, SQUISH and SQUISH-E only — see *The one trajectory DOTS does not cover* |
 
 Output lands at `<out>/<algorithm>/<dataset>/m<rate>/<name>.json`, one document per
 trajectory per algorithm per rate. The dataset name comes from the input directory, so
@@ -126,7 +126,13 @@ distributions in [datasets.md](datasets.md) for why this is a GeoLife problem sp
 
 The document count is predictable rather than emergent: a rate is only produced when its
 budget stays at or above 2 vertices, and 5 for SQUISH, so summing the qualifying rates over
-all three algorithms gives 786 642 exactly — which every dataset has matched to the document.
+DPn, SQUISH and DOTS gives 786 642 exactly — which every dataset has matched to the document.
+
+**That table and that total are from before SQUISH-E was a baseline.** It adds one document
+per trajectory per rate whose budget is at least 3, so its count sits between SQUISH's and
+DPn's; the new total has not been measured on the corpus yet. It costs one run per rate like
+SQUISH, but each removal scans its queue, so it is quadratic in trajectory length at a fixed
+rate.
 
 ## The one trajectory DOTS does not cover
 
@@ -198,8 +204,8 @@ and elapsed time — rather than trusting the arithmetic above.
 | `--skip-existing` | off | do not recompute a measurement already on disk, making an interrupted run resumable |
 
 A simplification that is absent is skipped rather than treated as an error, so a corpus with
-gaps — DOTS is missing 1 040 operating points, see *Reading the numbers* — measures cleanly
-without special handling.
+gaps — the baselines have different budget floors, and `geolife-013552` has no DOTS results —
+measures cleanly without special handling.
 
 Writes `data/frechet-distances/<algorithm>/<dataset>/m<rate>/<name>.json`, **mirroring the
 simplified tree exactly**, one document per simplification:

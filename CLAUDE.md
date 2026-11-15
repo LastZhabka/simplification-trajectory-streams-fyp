@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 Streaming δ-simplification of trajectory streams under the continuous Fréchet distance.
-FYP. The algorithm is being rewritten; what exists now is the tooling around it.
+FYP. Ours is `ConvexShadow` in `src/algo/simplify/`, described in `docs/algorithm.md`; the rest
+is the baselines it is compared with and the pipelines that run the comparison.
 
 ## Style
 
@@ -19,18 +20,19 @@ FYP. The algorithm is being rewritten; what exists now is the tooling around it.
 | `src/trajio/` | Python. Dataset formats → our format. | Standard library only. Readers must run anywhere, and dataset parsing must not depend on the plotting stack. Values are copied verbatim — filtering is a modelling decision, not a reader's. |
 | `src/algo/` | C++20 library `ssk`. Reads our format. | No third-party libraries; the build works offline, hence the hand-rolled JSON in `io/json`. `src/algo` is the include root, so headers are `#include "io/..."`. Algorithm tracks land beside `io/`. |
 | `src/viz/` | Python. Renders trajectories and results. | The only part that needs installed packages (matplotlib, `Agg` backend). |
-| `data/` | `downloads/` `trajectories/` `simplified-trajectories/` `frechet-distances/` `synthetic/` `renders/` | All git-ignored. Gigabytes, and licence-restricted. Commands are committed, data is not. |
+| `data/` | `downloads/` `trajectories/` `simplified-trajectories/` `frechet-distances/` `error-matched/` `synthetic/` `renders/` | All git-ignored. Gigabytes, and licence-restricted. Commands are committed, data is not. |
 | `tests/` | C++ unit tests. | Own ~60-line harness — GoogleTest via FetchContent would break an offline configure. |
 | `src/algo/frechet/` | Continuous Frechet distance, `Frechet<D>`. | Ported from the GIS Cup 2017 winner (MIT, standard library only), cross-verified against two independent implementations. The decision `within()` is the primitive and is exact; `distance()` bisects it. |
 | `src/algo/simplify/` | `Simplifier<D>` + Douglas-Peucker, SQUISH, SQUISH-E, DOTS. | Ports of the reference implementations, not reinventions — match upstream behaviour and record any deviation in `docs/simplification.md`. **Keep them in upstream's form: no restructuring or clean-up of the ports or of `frechet/`.** Dimension is a template parameter; `simplify()` returns points because a future algorithm may invent them, and `SubsetSimplifier` adds `indices()` for the ones that don't. |
-| `docs/` | `datasets.md`, `trajio.md`, `simplification.md`, `comparison.md`, `pipeline.md`, `frechet-distance.md`, `references.md`, `running.md` | Measured numbers, not quoted ones. |
+| `src/algo/validate/` | `validate::Validator`: checks `ConvexShadow`'s invariants as it runs and counts the outcomes. | Counts, never throws — a corpus run must report how many checks failed, not stop at the first. Its predicates are its own, not the algorithm's, so the two can disagree. Off unless a validator is passed (`ssk_match --validate`), because it costs about 1.8×. |
+| `docs/` | `datasets.md`, `trajio.md`, `simplification.md`, `algorithm.md`, `comparison.md`, `pipeline.md`, `frechet-distance.md`, `references.md`, `running.md` | Measured numbers, not quoted ones. |
 | `src/pipelines/` | Experiment drivers, one directory each: `simplify-sweep` (`ssk_simplify`), `frechet-distance` (`ssk_frechet`), `error-match` (`ssk_match`), `audit` (`ssk_audit`). `corpus.{hpp,cpp}` is what they share: file list, sharding, atomic document write. | The algorithms are C++, so the driver is too — a Python one would spawn a process per trajectory. Entry points live with their piece under `src/`, as `viz` and `trajio` already do. Each keeps its logic in a library beside a thin `main`, so the tests drive it without running the binary. |
 
 **One format everywhere:** `{"dim": 2, "name": "...", "t_unit": "unix_ms", "t": [...],
 "points": [[x, y], ...]}`. trajio writes it, `algo/io` reads it, `viz` draws it. `t` is
 optional (one per point; `unix_ms` absolute or `ms` from the sequence start) and exists for
 the SED-based baselines. A *result* document adds `algorithm`, `mode`, `params`, `stats`,
-`input_points`, `frechet`. No CSV output anywhere — the CSV in the repo is dataset input
+`source`, and `frechet` once measured; ours adds `validation` when run with `--validate`. No CSV output anywhere — the CSV in the repo is dataset input
 only.
 
 ## Running
@@ -54,6 +56,8 @@ cmake --build build -j
 .\build\tests\ssk_tests.exe [name-filter]
 .\build\src\pipelines\simplify-sweep\ssk_simplify.exe --in data\trajectories\mopsi --out data\simplified-trajectories
 .\build\src\pipelines\frechet-distance\ssk_frechet.exe --in data\trajectories\mopsi --out data\frechet-distances
+.\build\src\pipelines\error-match\ssk_match.exe --in data\trajectories\mopsi --eps 0.5 [--validate]
+python scripts\comparison_stats.py --matched data\error-matched
 ```
 
 ```sh
@@ -72,6 +76,8 @@ cmake --build build -j
 ./build/tests/ssk_tests [name-filter]
 ./build/src/pipelines/simplify-sweep/ssk_simplify --in data/trajectories/mopsi --out data/simplified-trajectories
 ./build/src/pipelines/frechet-distance/ssk_frechet --in data/trajectories/mopsi --out data/frechet-distances
+./build/src/pipelines/error-match/ssk_match --in data/trajectories/mopsi --eps 0.5 [--validate]
+python scripts/comparison_stats.py --matched data/error-matched
 ```
 
 **Nothing in the project is platform-specific — only the shell is.** No `_WIN32`, no `.exe` in
