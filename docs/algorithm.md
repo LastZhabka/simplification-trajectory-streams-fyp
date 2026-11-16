@@ -182,6 +182,12 @@ built `F` as a polygon: the hull of the shadow and a fan of rays from `p`, at mo
 and 1.3× longer than the far side of the disk. That needed `atan2`, a rule for where the range
 of angles wraps, and a reach that kept the fan's chords clear of the disk.
 
+**That version is kept**, unchanged but for its name, as `ConvexShadowFarPoints`
+(`convex-shadow-far-points`) in `src/algo/simplify/convex_shadow_far_points.cpp`, so that its
+results can be reproduced and the two compared. It reproduces all 1 260 runs below bit for
+bit. The current validator flags its grid hull in 519 of them, which is the false corners
+described under *Once per run*, and 3 of its 40 518 856 shadows.
+
 **Measured against that version** (2026-11-16), on samples of three datasets, 1 260 matched
 runs over five (dataset, ε) cells:
 

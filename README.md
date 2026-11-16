@@ -23,7 +23,8 @@ src/
   trajio/       Python   dataset formats  ->  our format          (ingestion)
   algo/         C++      the library `ssk`; reads our format
     io/                  json.{hpp,cpp}, trajectory.{hpp,cpp}
-    simplify/            the Simplifier interface, the four baselines, and ours (convex_shadow)
+    simplify/            the Simplifier interface, the four baselines, and ours (convex_shadow,
+                         and convex_shadow_far_points, its first implementation)
     frechet/             the continuous Fréchet distance
     validate/            checks of our algorithm's invariants, counted as it runs
   pipelines/    C++      the experiment drivers
@@ -135,7 +136,7 @@ cmake --build build -j
 .\build\tests\ssk_tests.exe
 ```
 
-The generator is the only difference: MinGW needs naming, the default works elsewhere. 80
+The generator is the only difference: MinGW needs naming, the default works elsewhere. 82
 tests, a few seconds.
 
 ### 3. End to end
@@ -220,6 +221,7 @@ const auto simplified = ours.simplify(curve);   // points; ours invents its vert
 | SQUISH-E | uestc-db/traj-compression | `cmp_ratio` and `sed_error` |
 | DOTS | caoweiquan322/dots | `lssd_threshold` |
 | ours, `ConvexShadow` | Cheng, Huang & Jiang, SoCG 2025 | `delta` and `eps` |
+| ours, `ConvexShadowFarPoints` | its first implementation, kept for comparison | `delta` and `eps` |
 
 The ports follow their sources statement for statement and are kept in that form. The one
 change to an upstream algorithm is in DOTS, which could join a point to a vertex that comes

@@ -68,7 +68,7 @@ cmake --build build -j
 The generator is the only build difference: MinGW needs naming, the default works elsewhere.
 Use `-G Ninja` on either platform if you have it.
 
-80 tests, a few seconds. Run them before anything long — they cover the simplifiers against
+82 tests, a few seconds. Run them before anything long — they cover the simplifiers against
 their reference implementations, the Fréchet distance against three, and both pipelines'
 document formats.
 

@@ -1,8 +1,9 @@
 # CLAUDE.md
 
 Streaming δ-simplification of trajectory streams under the continuous Fréchet distance.
-FYP. Ours is `ConvexShadow` in `src/algo/simplify/`, described in `docs/algorithm.md`; the rest
-is the baselines it is compared with and the pipelines that run the comparison.
+FYP. Ours is `ConvexShadow` in `src/algo/simplify/`, described in `docs/algorithm.md`, and
+`ConvexShadowFarPoints` beside it is its first implementation, kept for comparison; the rest is
+the baselines they are compared with and the pipelines that run the comparison.
 
 ## Style
 
