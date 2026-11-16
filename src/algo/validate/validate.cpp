@@ -123,10 +123,11 @@ bool segment_meets(Vec p, Vec q, const Polygon& poly) {
 const char* name(Check check) {
   switch (check) {
     case Check::GridHull: return "grid_hull";
-    case Check::GridCoversBall: return "grid_covers_ball";
-    case Check::GridInsideDisk: return "grid_inside_disk";
+    case Check::RegionConvex: return "region_convex";
+    case Check::RegionCoversBall: return "region_covers_ball";
+    case Check::RegionInsideDisk: return "region_inside_disk";
     case Check::ShadowConvex: return "shadow_convex";
-    case Check::ShadowInsideGrid: return "shadow_inside_grid";
+    case Check::ShadowInsideRegion: return "shadow_inside_region";
     case Check::ShadowBehind: return "shadow_behind";
     case Check::SegmentStabs: return "segment_stabs";
   }
@@ -163,32 +164,38 @@ void Validator::record(Check check, bool ok) {
 }
 
 void Validator::grid(const Polygon& points, const Polygon& hull, double rho, double r) {
-  const bool convex = convex_ccw(hull);
   record(Check::GridHull,
-         convex && all_corners(hull) &&
+         convex_ccw(hull) &&
              std::all_of(points.begin(), points.end(),
                          [&](Vec q) { return inside_or_on(hull, q); }) &&
              std::all_of(hull.begin(), hull.end(), [&](Vec q) {
                return std::find(points.begin(), points.end(), q) != points.end();
              }));
+  region(hull, rho, r);
+}
+
+void Validator::region(const Polygon& poly, double rho, double r) {
+  const bool convex = convex_ccw(poly) && all_corners(poly);
+  record(Check::RegionConvex, convex);
 
   bool covers = convex;
-  for (std::size_t i = 0; covers && i < hull.size(); ++i) {
-    const Vec a = hull[i];
-    const Vec b = next_of(hull, i);
+  for (std::size_t i = 0; covers && i < poly.size(); ++i) {
+    const Vec a = poly[i];
+    const Vec b = next_of(poly, i);
     covers = cross(a, b) >= rho * (1.0 - kSlack) * length(b - a);
   }
-  record(Check::GridCoversBall, covers);
+  record(Check::RegionCoversBall, covers);
 
-  record(Check::GridInsideDisk, std::all_of(hull.begin(), hull.end(), [&](Vec q) {
+  record(Check::RegionInsideDisk, std::all_of(poly.begin(), poly.end(), [&](Vec q) {
     return length(q) <= r * (1.0 + kSlack);
   }));
 }
 
-void Validator::shadow(const Polygon& next, const Polygon& grid, Vec p, const Polygon& previous) {
+void Validator::shadow(const Polygon& next, const Polygon& region, Vec p,
+                       const Polygon& previous) {
   record(Check::ShadowConvex, convex_ccw(next));
-  record(Check::ShadowInsideGrid, std::all_of(next.begin(), next.end(), [&](Vec q) {
-    return inside_or_on(grid, q);
+  record(Check::ShadowInsideRegion, std::all_of(next.begin(), next.end(), [&](Vec q) {
+    return inside_or_on(region, q);
   }));
   record(Check::ShadowBehind, std::all_of(next.begin(), next.end(), [&](Vec q) {
     return segment_meets(p, q, previous);

@@ -185,8 +185,14 @@ of angles wraps, and a reach that kept the fan's chords clear of the disk.
 **That version is kept**, unchanged but for its name, as `ConvexShadowFarPoints`
 (`convex-shadow-far-points`) in `src/algo/simplify/convex_shadow_far_points.cpp`, so that its
 results can be reproduced and the two compared. It reproduces all 1 260 runs below bit for
-bit. The current validator flags its grid hull in 519 of them, which is the false corners
-described under *Once per run*, and 3 of its 40 518 856 shadows.
+bit. The current validator flags its grid hull as a region in 519 of them
+(`region_convex`: the false corners described under *Once per run*) and 3 of its 40 518 856
+shadows.
+
+**A third implementation, `ConvexShadow32`** (`convex-shadow-32`), keeps this construction of
+`F` and replaces `conv(G_v)` by a regular m-gon with `m = O(ε^(−1/2))` sides, the fewest any
+convex polygon can have between the same two circles. Why, and what it measures, is in
+[convex-shadow-32.md](convex-shadow-32.md).
 
 **Measured against that version** (2026-11-16), on samples of three datasets, 1 260 matched
 runs over five (dataset, ε) cells:
@@ -303,9 +309,11 @@ tolerance (`1e-9` of the bounding-box diagonal) that `ssk_frechet` used on the b
 protocol reports measured error on both sides, and measuring here saves reading 786 642
 results back from disk.
 
-**It runs one implementation of ours**, named by `--ours`: `convex-shadow`, the default, or
-`convex-shadow-far-points`, its first implementation (§4, *How `behind` builds F*). Each is its
-own run, as each ε is, so the two can be compared on the same baseline operating points.
+**It runs one implementation of ours**, named by `--ours`: `convex-shadow`, the default;
+`convex-shadow-far-points`, its first implementation (§4, *How `behind` builds F*); or
+`convex-shadow-32`, the same with a regular m-gon for `conv(G_v)`
+([convex-shadow-32.md](convex-shadow-32.md)). Each is its own run, as each ε is, so they can be
+compared on the same baseline operating points.
 
 **It writes**, under a root per implementation and ε:
 
@@ -329,7 +337,7 @@ It exists so that the statistics read one small file per trajectory instead of e
 |---|---|---|
 | `--in DIR` | required | a dataset directory of trajectory documents |
 | `--eps E` | required | ours alone, so each value is its own run, and a result must say which it used |
-| `--ours NAME` | `convex-shadow` | which implementation of ours; `convex-shadow-far-points` is the other |
+| `--ours NAME` | `convex-shadow` | which implementation of ours: `convex-shadow`, `convex-shadow-far-points` or `convex-shadow-32` |
 | `--distances DIR` | `data/frechet-distances` | the baselines' measurements |
 | `--out DIR` | `data/error-matched` | root of the result tree |
 | `--tol REL` | `1e-9` | Fréchet bisection tolerance, relative to the input's diagonal, as in `ssk_frechet` |
@@ -523,11 +531,12 @@ less.
 
 | check | when | what must hold |
 |---|---|---|
-| `grid_hull` | once per run | `conv(G_v)` is convex, counter-clockwise, contains every boundary grid point, and has only grid points as vertices, none in line with its neighbours |
-| `grid_covers_ball` | once per run | it contains the ball of radius `(1+ε/2)δ`, so Lemma 2's witness fits inside |
-| `grid_inside_disk` | once per run | it lies in the disk of radius `(1+ε)δ`, which is the error bound |
+| `grid_hull` | once per run, `conv(G_v)` only | it contains every boundary grid point and has only grid points as vertices |
+| `region_convex` | once per run | the region, `conv(G_v)` or the m-gon, is convex and counter-clockwise, with no vertex in line with its neighbours |
+| `region_covers_ball` | once per run | it contains the ball of radius `(1+ε/2)δ`, so Lemma 2's witness fits inside |
+| `region_inside_disk` | once per run | it lies in the disk of radius `(1+ε)δ`, which is the error bound |
 | `shadow_convex` | per candidate per vertex | the new `S[p]` is convex and counter-clockwise |
-| `shadow_inside_grid` | per candidate per vertex | it lies in `conv(G_v)` of the vertex just read |
+| `shadow_inside_region` | per candidate per vertex | it lies in the region of the vertex just read |
 | `shadow_behind` | per candidate per vertex | every vertex of it is seen from `p` through the previous `S[p]` |
 | `segment_stabs` | per output segment | the segment meets the disk of radius `(1+ε)δ` of every input vertex it replaces, in order |
 

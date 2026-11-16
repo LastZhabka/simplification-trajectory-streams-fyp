@@ -28,19 +28,20 @@ using Polygon = std::vector<Vec>;
 inline constexpr double kSlack = 1e-9;
 
 enum class Check : std::size_t {
-  // conv(G_v), once per run, with v at the origin
-  GridHull,          // convex, counter-clockwise, the hull of the grid points, every vertex a corner
-  GridCoversBall,    // it contains the ball of radius (1 + eps/2) * delta: Lemma 2's witness fits
-  GridInsideDisk,    // it lies in the disk of radius (1 + eps) * delta: the error bound
+  // the region around a vertex, once per run, with the vertex at the origin
+  GridHull,            // conv(G_v) only: every grid point is in it and every vertex is one
+  RegionConvex,        // convex, counter-clockwise, every vertex a corner
+  RegionCoversBall,    // it contains the ball of radius (1 + eps/2) * delta: Lemma 2's witness fits
+  RegionInsideDisk,    // it lies in the disk of radius (1 + eps) * delta: the error bound
   // S[p], once per candidate per input vertex
-  ShadowConvex,      // the new shadow is convex and counter-clockwise
-  ShadowInsideGrid,  // it lies in conv(G_v) of the vertex just read
-  ShadowBehind,      // each of its vertices is seen from p through the previous shadow
+  ShadowConvex,        // the new shadow is convex and counter-clockwise
+  ShadowInsideRegion,  // it lies in the region of the vertex just read
+  ShadowBehind,        // each of its vertices is seen from p through the previous shadow
   // an emitted segment, once per output segment
-  SegmentStabs,      // it meets the disk of every input vertex it replaces, in order
+  SegmentStabs,        // it meets the disk of every input vertex it replaces, in order
 };
 
-inline constexpr std::size_t kChecks = 7;
+inline constexpr std::size_t kChecks = 8;
 
 struct Count {
   std::size_t checked = 0;
@@ -56,8 +57,11 @@ void add(Stats& into, const Stats& from);
 
 class Validator {
  public:
+  // conv(G_v) as the hull of the grid points, and then as a region.
   void grid(const Polygon& points, const Polygon& hull, double rho, double r);
-  void shadow(const Polygon& next, const Polygon& grid, Vec p, const Polygon& previous);
+  // Any region around a vertex: conv(G_v), or the regular m-gon that replaces it.
+  void region(const Polygon& poly, double rho, double r);
+  void shadow(const Polygon& next, const Polygon& region, Vec p, const Polygon& previous);
   void segment(Vec a, Vec b, std::span<const Vec> stabbed, double r);
 
   [[nodiscard]] const Stats& stats() const { return stats_; }

@@ -5,6 +5,7 @@
 #include "validate/validate.hpp"
 
 #include <cmath>
+#include <numbers>
 #include <vector>
 
 namespace {
@@ -25,19 +26,38 @@ std::size_t checks(const Validator& v, Check check) {
 const Polygon kSquare{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
 const Polygon kPoints{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}, {0, 0}, {0, 1}};
 
-TEST("validate/a correct grid hull passes all three grid checks") {
+TEST("validate/a correct grid hull passes the grid check and the three region checks") {
   Validator v;
   v.grid(kPoints, kSquare, 1.0, 1.5);
-  CHECK(ssk::validate::checked(v.stats()) == 3);
+  CHECK(ssk::validate::checked(v.stats()) == 4);
   CHECK(ssk::validate::failed(v.stats()) == 0);
 }
 
-TEST("validate/a hull with a vertex in the middle of an edge fails") {
+TEST("validate/a region with a vertex in the middle of an edge fails") {
   // What the hull of scaled grid points keeps when rounding hides that three are in a line.
   const Polygon ring{{-1, -1}, {0, -1}, {1, -1}, {1, 1}, {-1, 1}};
   Validator v;
   v.grid(ring, ring, 0.1, 2.0);
-  CHECK(failures(v, Check::GridHull) == 1);
+  CHECK(failures(v, Check::RegionConvex) == 1);
+  CHECK_MSG(failures(v, Check::GridHull) == 0, "it is still the hull of the points");
+}
+
+TEST("validate/a region needs no grid") {
+  // A regular hexagon of circumradius 1: inradius cos 30 deg = 0.866.
+  Polygon hexagon;
+  for (int i = 0; i < 6; ++i) {
+    const double a = i * std::numbers::pi / 3;
+    hexagon.push_back({std::cos(a), std::sin(a)});
+  }
+  Validator fits;
+  fits.region(hexagon, 0.86, 1.0);
+  CHECK(ssk::validate::checked(fits.stats()) == 3);
+  CHECK(checks(fits, Check::GridHull) == 0);
+  CHECK(ssk::validate::failed(fits.stats()) == 0);
+
+  Validator thin;
+  thin.region(hexagon, 0.87, 1.0);
+  CHECK_MSG(failures(thin, Check::RegionCoversBall) == 1, "the inradius is 0.866");
 }
 
 TEST("validate/a hull that misses a point, turns clockwise or invents a vertex fails") {
@@ -47,19 +67,19 @@ TEST("validate/a hull that misses a point, turns clockwise or invents a vertex f
 
   Validator clockwise;
   clockwise.grid(kPoints, {{-1, 1}, {1, 1}, {1, -1}, {-1, -1}}, 0.1, 2.0);
-  CHECK(failures(clockwise, Check::GridHull) == 1);
+  CHECK(failures(clockwise, Check::RegionConvex) == 1);
 
   Validator invented;
   invented.grid(kPoints, {{-2, -2}, {2, -2}, {2, 2}, {-2, 2}}, 0.1, 3.0);
   CHECK(failures(invented, Check::GridHull) == 1);
 }
 
-TEST("validate/a grid too small for the ball or too large for the disk fails") {
+TEST("validate/a region too small for the ball or too large for the disk fails") {
   Validator v;
   v.grid(kPoints, kSquare, 1.1, 1.2);
   CHECK(failures(v, Check::GridHull) == 0);
-  CHECK_MSG(failures(v, Check::GridCoversBall) == 1, "the square's sides are 1 from the centre");
-  CHECK_MSG(failures(v, Check::GridInsideDisk) == 1, "its corners are sqrt 2 from the centre");
+  CHECK_MSG(failures(v, Check::RegionCoversBall) == 1, "the square's sides are 1 from the centre");
+  CHECK_MSG(failures(v, Check::RegionInsideDisk) == 1, "its corners are sqrt 2 from the centre");
 }
 
 TEST("validate/a shadow seen through the previous one passes") {
@@ -72,7 +92,7 @@ TEST("validate/a shadow seen through the previous one passes") {
   CHECK(ssk::validate::failed(v.stats()) == 0);
 }
 
-TEST("validate/a shadow not behind the previous one, outside the grid or not convex fails") {
+TEST("validate/a shadow not behind the previous one, outside the region or not convex fails") {
   const Polygon grid{{8, -3}, {14, -3}, {14, 3}, {8, 3}};
   const Polygon next{{10, -1}, {12, -1}, {12, 1}, {10, 1}};
 
@@ -84,7 +104,7 @@ TEST("validate/a shadow not behind the previous one, outside the grid or not con
   Validator outside;
   outside.shadow({{10, -1}, {16, -1}, {16, 1}, {10, 1}}, grid, {0, 0},
                  {{4, -1}, {6, -1}, {6, 1}, {4, 1}});
-  CHECK(failures(outside, Check::ShadowInsideGrid) == 1);
+  CHECK(failures(outside, Check::ShadowInsideRegion) == 1);
 
   Validator dented;
   dented.shadow({{10, -1}, {12, -1}, {11, 0}, {12, 1}, {10, 1}}, grid, {0, 0},

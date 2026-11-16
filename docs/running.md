@@ -68,7 +68,7 @@ cmake --build build -j
 The generator is the only build difference: MinGW needs naming, the default works elsewhere.
 Use `-G Ninja` on either platform if you have it.
 
-82 tests, a few seconds. Run them before anything long — they cover the simplifiers against
+86 tests, a few seconds. Run them before anything long — they cover the simplifiers against
 their reference implementations, the Fréchet distance against three, and both pipelines'
 document formats.
 
@@ -389,10 +389,12 @@ this is how to run it.
 It needs the build and step 6's `data/frechet-distances/`; a trajectory with no baseline
 document is skipped. **`--eps` is required**, and each value is its own run under its own root.
 
-**`--ours` picks the implementation**: `convex-shadow`, the default, or
-`convex-shadow-far-points`, its first implementation, kept for comparison. Each is also its own
-run, under `data/error-matched/<ours>/`. The commands below set it once at the top as `$ours`;
-to run the other, change that line and run them again.
+**`--ours` picks the implementation**: `convex-shadow`, the default;
+`convex-shadow-far-points`, its first implementation, kept for comparison; or
+`convex-shadow-32`, which uses a regular m-gon for `conv(G_v)`
+([convex-shadow-32.md](convex-shadow-32.md)). Each is also its own run, under
+`data/error-matched/<ours>/`. The commands below set it once at the top as `$ours`; to run
+another, change that line and run them again.
 
 One dataset at all three ε, 8 processes at a time:
 
@@ -455,8 +457,9 @@ for eps in 0.5 0.3 0.1; do
 done
 ```
 
-Running both implementations doubles step 7. If time is short, run `convex-shadow` on the
-whole corpus and `convex-shadow-far-points` on one dataset at one ε: the two give the same
+Each implementation is another full step 7. If time is short, run `convex-shadow` and
+`convex-shadow-32` on the whole corpus, since they differ in the region and so in the
+results, and `convex-shadow-far-points` on one dataset at one ε: it gives `convex-shadow`'s
 vertex count on every sample checked so far (§4 of [algorithm.md](algorithm.md)), and that
 dataset is enough to confirm it.
 

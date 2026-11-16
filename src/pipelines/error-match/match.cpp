@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "simplify/convex_shadow.hpp"
+#include "simplify/convex_shadow_32.hpp"
 #include "simplify/convex_shadow_far_points.hpp"
 
 namespace ssk::pipelines {
@@ -26,6 +27,9 @@ std::unique_ptr<simplify::Simplifier<2>> make_ours(const std::string& ours,
   }
   if (ours == "convex-shadow-far-points") {
     return std::make_unique<simplify::ConvexShadowFarPoints>(params, validator);
+  }
+  if (ours == "convex-shadow-32") {
+    return std::make_unique<simplify::ConvexShadow32>(params, validator);
   }
   throw std::runtime_error("error-match: no implementation of ours named '" + ours + "'");
 }

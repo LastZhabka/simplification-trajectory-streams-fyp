@@ -23,8 +23,9 @@ src/
   trajio/       Python   dataset formats  ->  our format          (ingestion)
   algo/         C++      the library `ssk`; reads our format
     io/                  json.{hpp,cpp}, trajectory.{hpp,cpp}
-    simplify/            the Simplifier interface, the four baselines, and ours (convex_shadow,
-                         and convex_shadow_far_points, its first implementation)
+    simplify/            the Simplifier interface, the four baselines, and ours: convex_shadow,
+                         convex_shadow_far_points (its first implementation) and
+                         convex_shadow_32 (a regular m-gon for conv(G_v))
     frechet/             the continuous Fréchet distance
     validate/            checks of our algorithm's invariants, counted as it runs
   pipelines/    C++      the experiment drivers
@@ -136,7 +137,7 @@ cmake --build build -j
 .\build\tests\ssk_tests.exe
 ```
 
-The generator is the only difference: MinGW needs naming, the default works elsewhere. 82
+The generator is the only difference: MinGW needs naming, the default works elsewhere. 86
 tests, a few seconds.
 
 ### 3. End to end
@@ -222,6 +223,7 @@ const auto simplified = ours.simplify(curve);   // points; ours invents its vert
 | DOTS | caoweiquan322/dots | `lssd_threshold` |
 | ours, `ConvexShadow` | Cheng, Huang & Jiang, SoCG 2025 | `delta` and `eps` |
 | ours, `ConvexShadowFarPoints` | its first implementation, kept for comparison | `delta` and `eps` |
+| ours, `ConvexShadow32` | `ConvexShadow` with a regular m-gon, m = O(ε^(−1/2)), for `conv(G_v)` | `delta` and `eps` |
 
 The ports follow their sources statement for statement and are kept in that form. The one
 change to an upstream algorithm is in DOTS, which could join a point to a vertex that comes
@@ -274,7 +276,8 @@ mirrors the first one document for document.
 baseline's measured error. Ours is then no worse than the baseline, and the question is how
 many vertices it needs. It measures ours in the same pass, checks the bound exactly, and with
 `--validate` counts the invariant checks into every result. `--ours` picks the implementation,
-`convex-shadow` by default or `convex-shadow-far-points`, and each gets its own tree.
+`convex-shadow` by default, `convex-shadow-far-points` or `convex-shadow-32`, and each gets its
+own tree.
 
 **`scripts/comparison_stats.py`** turns the summaries into the tables: coverage, each
 baseline's error at a fixed rate, ours against each baseline, Theorem 3 checked, and the
@@ -319,6 +322,7 @@ loop with both endpoints pinned.
 |---|---|
 | [`docs/running.md`](docs/running.md) | every step from a fresh clone to the comparison tables, with costs |
 | [`docs/algorithm.md`](docs/algorithm.md) | our algorithm, `ssk_match`, the statistics and the validation |
+| [`docs/convex-shadow-32.md`](docs/convex-shadow-32.md) | the m-gon region, and why it has O(ε^(−1/2)) sides |
 | [`docs/comparison.md`](docs/comparison.md) | the experimental protocol and what it can claim |
 | [`docs/simplification.md`](docs/simplification.md) | the baselines: interface, ports, deviations, verification |
 | [`docs/frechet-distance.md`](docs/frechet-distance.md) | the Fréchet port and its measurements |
