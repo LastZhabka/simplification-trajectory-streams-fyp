@@ -68,7 +68,7 @@ cmake --build build -j
 The generator is the only build difference: MinGW needs naming, the default works elsewhere.
 Use `-G Ninja` on either platform if you have it.
 
-79 tests, a few seconds. Run them before anything long — they cover the simplifiers against
+80 tests, a few seconds. Run them before anything long — they cover the simplifiers against
 their reference implementations, the Fréchet distance against three, and both pipelines'
 document formats.
 
@@ -475,7 +475,7 @@ On disk, each ε of `mot-dancetrack` is 13 027 files and 55 MB: one result per b
 document plus one summary per trajectory.
 
 **Validating.** Add `--validate` to the argument list to have the algorithm's invariants
-checked as it runs, at about 1.8× the time. Each shard's log then ends with a count per check,
+checked as it runs, at 2–3.5× the time. Each shard's log then ends with a count per check,
 and step 8's script prints them pooled. What is checked is in [algorithm.md](algorithm.md) §8.
 Every `failed` count should be 0.
 

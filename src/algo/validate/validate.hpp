@@ -29,7 +29,7 @@ inline constexpr double kSlack = 1e-9;
 
 enum class Check : std::size_t {
   // conv(G_v), once per run, with v at the origin
-  GridHull,          // the polygon is convex, counter-clockwise and the hull of the grid points
+  GridHull,          // convex, counter-clockwise, the hull of the grid points, every vertex a corner
   GridCoversBall,    // it contains the ball of radius (1 + eps/2) * delta: Lemma 2's witness fits
   GridInsideDisk,    // it lies in the disk of radius (1 + eps) * delta: the error bound
   // S[p], once per candidate per input vertex

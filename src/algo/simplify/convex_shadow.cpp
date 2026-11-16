@@ -12,8 +12,6 @@
 namespace ssk::simplify {
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
-
 using validate::Polygon;
 using validate::Vec;
 
@@ -39,8 +37,8 @@ Vec closest_on_segment(Vec q, Vec a, Vec b) {
   return a + ab * std::clamp(dot(q - a, ab) / len2, 0.0, 1.0);
 }
 
-// Only clearly inside counts: a point taken as inside may become an output vertex, or widen a
-// shadow to all of conv(G_v), so near the boundary the answer has to err inward.
+// Only clearly inside counts: a point taken as inside becomes an output vertex, so near the
+// boundary the answer has to err inward.
 bool contains(const Polygon& poly, Vec q) {
   for (std::size_t i = 0; i < poly.size(); ++i) {
     const Vec a = poly[i];
@@ -87,13 +85,6 @@ Polygon clip_half_plane(const Polygon& poly, Vec a, Vec b) {
   return out;
 }
 
-Polygon clip(Polygon subject, const Polygon& clipper) {
-  for (std::size_t i = 0; i < clipper.size() && !subject.empty(); ++i) {
-    subject = clip_half_plane(subject, clipper[i], clipper[(i + 1) % clipper.size()]);
-  }
-  return subject;
-}
-
 Polygon hull(Polygon pts) {
   std::sort(pts.begin(), pts.end(),
             [](Vec a, Vec b) { return a.x < b.x || (a.x == b.x && a.y < b.y); });
@@ -120,43 +111,72 @@ Polygon hull(Polygon pts) {
   return h;
 }
 
-// F(shadow, p): every point seen from p behind the shadow, cut off beyond the disk D(v, r).
-// Rays at most 30 degrees apart and 1.3 times longer than the disk's far side keep the cut
-// clear of the disk, so inside it this is F exactly.
-Polygon cover(const Polygon& shadow, Vec p, Vec v, double r) {
-  Vec centroid;
-  for (const Vec s : shadow) {
-    centroid = centroid + s;
+Vec centre(const Polygon& poly) {
+  Vec sum;
+  for (const Vec q : poly) {
+    sum = sum + q;
   }
-  centroid = centroid * (1.0 / static_cast<double>(shadow.size()));
-  const double a0 = std::atan2(centroid.y - p.y, centroid.x - p.x);
-
-  double lo = 0.0;
-  double hi = 0.0;
-  double far = 0.0;
-  for (const Vec s : shadow) {
-    const Vec d = s - p;
-    const double a = std::remainder(std::atan2(d.y, d.x) - a0, 2.0 * kPi);
-    lo = std::min(lo, a);
-    hi = std::max(hi, a);
-    far = std::max(far, norm(d));
-  }
-
-  const double reach = 1.3 * std::max(far, norm(p - v) + r) + r;
-  const int k = std::max(2, static_cast<int>(std::ceil((hi - lo) / (kPi / 6.0))) + 1);
-  Polygon pts = shadow;
-  for (int i = 0; i < k; ++i) {
-    const double a = a0 + lo + (hi - lo) * static_cast<double>(i) / static_cast<double>(k - 1);
-    pts.push_back({p.x + reach * std::cos(a), p.y + reach * std::sin(a)});
-  }
-  return hull(std::move(pts));
+  return sum * (1.0 / static_cast<double>(poly.size()));
 }
 
-// The grid points of the cells of G_v that meet its boundary circle, with v at the origin.
-// Only these start a segment: sliding a start backwards along its segment until it leaves
-// the ball keeps every stab in order, so a boundary start reaches as far as an interior one.
-Polygon boundary_points(double h, double rho) {
-  const double radius = rho / h;
+// Whether edge a->b of a shadow faces p: p is beyond its line, or too near it to say. Too near
+// is within 1e-9 of the lengths involved, where the sign of `side`, cross(b - a, p - a), is
+// rounding's to decide.
+bool faces(double side, Vec a, Vec b, Vec p) {
+  return side < 0.0 || side * side < 1e-18 * dist2(a, b) * (dist2(p, a) + dist2(p, b));
+}
+
+// around ∩ F(shadow, p), where F is every point seen from p behind the shadow. F is bounded by
+// the edges of the shadow that face p and by the two tangents from p; the edges facing away
+// are the side it is open on. Every step here only cuts `around`, so taking an edge to face p
+// when it does not costs area and never the bound.
+Polygon behind(const Polygon& around, const Polygon& shadow, Vec p) {
+  // A vertex of the shadow is in it, and then every point is behind it. The equality is exact:
+  // a start is a corner of conv(G_v) again whenever the input repeats the vertex its run began at.
+  if (std::find(shadow.begin(), shadow.end(), p) != shadow.end()) {
+    return around;
+  }
+  Polygon out = around;
+  bool cut = false;
+  bool outside = false;
+  for (std::size_t i = 0; i < shadow.size(); ++i) {
+    const Vec a = shadow[i];
+    const Vec b = shadow[(i + 1) % shadow.size()];
+    const double side = cross(b - a, p - a);
+    if (faces(side, a, b, p)) {
+      cut = true;
+      outside = outside || side < 0.0;
+      out = clip_half_plane(out, a, b);
+    }
+  }
+  if (!cut) {
+    return out;
+  }
+  if (outside) {
+    // Turning from the direction of the shadow's centre, the vertex furthest right and the one
+    // furthest left are where the tangents touch. Each side of that direction is ordered within
+    // itself: from a p on an edge the shadow spans half a turn, and which of its two ends is
+    // further left is then noise.
+    const Vec ahead = centre(shadow) - p;
+    const auto further_left = [p, ahead](Vec a, Vec b) {
+      const bool a_left = cross(ahead, a - p) > 0.0;
+      const bool b_left = cross(ahead, b - p) > 0.0;
+      return a_left == b_left ? cross(a - p, b - p) > 0.0 : b_left;
+    };
+    const auto [right, left] = std::minmax_element(shadow.begin(), shadow.end(), further_left);
+    out = clip_half_plane(out, p, *right);
+    out = clip_half_plane(out, *left, p);
+  }
+  // Clipping leaves repeated points and edges a few ulps long whose direction is noise. Every
+  // edge of a hull has the rest of it on its left, so the next step can believe each one.
+  return hull(std::move(out));
+}
+
+// The grid points of the cells of G_v that meet its boundary circle, with v at the origin and
+// the cell side as the unit. Only these start a segment: sliding a start backwards along its
+// segment until it leaves the ball keeps every stab in order, so a boundary start reaches as
+// far as an interior one.
+Polygon boundary_points(double radius) {
   const auto n = static_cast<long long>(std::ceil(radius));
   const auto near = [](long long k) { return std::clamp(0LL, k, k + 1); };
   const auto far = [](long long k) { return std::max(k * k, (k + 1) * (k + 1)); };
@@ -174,9 +194,16 @@ Polygon boundary_points(double h, double rho) {
   ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
   Polygon out;
   for (const auto& [i, j] : ids) {
-    out.push_back({static_cast<double>(i) * h, static_cast<double>(j) * h});
+    out.push_back({static_cast<double>(i), static_cast<double>(j)});
   }
   return out;
+}
+
+Polygon scaled(Polygon poly, double s) {
+  for (Vec& q : poly) {
+    q = q * s;
+  }
+  return poly;
 }
 
 std::vector<Candidate> start(Vec v, const Polygon& starts) {
@@ -187,18 +214,18 @@ std::vector<Candidate> start(Vec v, const Polygon& starts) {
   return out;
 }
 
-// S[p] <- conv(G_v) ∩ F(S[p], p), which is all of conv(G_v) once p is in S[p].
-std::vector<Candidate> advance(const std::vector<Candidate>& cands, Vec v,
-                               const Polygon& cells, double r, validate::Validator* validator) {
+// S[p] <- conv(G_v) ∩ F(S[p], p).
+std::vector<Candidate> advance(const std::vector<Candidate>& cands, Vec v, const Polygon& cells,
+                               validate::Validator* validator) {
   Polygon around;
   for (const Vec o : cells) {
     around.push_back(v + o);
   }
   std::vector<Candidate> out;
   for (const Candidate& c : cands) {
-    Polygon next = closest(c.shadow, c.p) == c.p ? around : clip(around, cover(c.shadow, c.p, v, r));
-    // Under three vertices is a tangency, which cover() would widen to a whole line. Lemma 2's
-    // witness stabs balls strictly inside conv(G_v), so its shadow always has area.
+    Polygon next = behind(around, c.shadow, c.p);
+    // Under three vertices is a tangency, a shadow without area, whose edges cannot say where p
+    // is. Lemma 2's witness stabs balls strictly inside conv(G_v), so its shadow always has area.
     if (next.size() >= 3) {
       if (validator != nullptr) {
         validator->shadow(next, around, c.p, c.shadow);
@@ -256,8 +283,11 @@ Curve<2> ConvexShadow::run(const Curve<2>& curve, const Context&) const {
   const double h = eps_ * delta / (2.0 * std::sqrt(2.0));
   const double r = (1.0 + eps_) * delta;
   const double rho = (1.0 + eps_ / 2.0) * delta;
-  const Polygon starts = boundary_points(h, rho);
-  const Polygon cells = hull(starts);
+  // The hull is taken in grid units, where grid points in a line are exactly in a line. Scaled
+  // first, rounding leaves some of them as corners.
+  const Polygon ring = boundary_points(rho / h);
+  const Polygon starts = scaled(ring, h);
+  const Polygon cells = scaled(hull(ring), h);
   if (validator_ != nullptr) {
     validator_->grid(starts, cells, rho, r);
   }
@@ -274,7 +304,7 @@ Curve<2> ConvexShadow::run(const Curve<2>& curve, const Context&) const {
   std::size_t first = 0;
   std::vector<Candidate> cands = start(vertices[0], starts);
   for (std::size_t i = 1; i < vertices.size(); ++i) {
-    std::vector<Candidate> next = advance(cands, vertices[i], cells, r, validator_);
+    std::vector<Candidate> next = advance(cands, vertices[i], cells, validator_);
     if (next.empty()) {
       emit_segment(out, cands, std::span(vertices).subspan(first, i - first), r, validator_);
       first = i;

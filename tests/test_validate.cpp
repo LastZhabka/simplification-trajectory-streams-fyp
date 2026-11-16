@@ -32,6 +32,14 @@ TEST("validate/a correct grid hull passes all three grid checks") {
   CHECK(ssk::validate::failed(v.stats()) == 0);
 }
 
+TEST("validate/a hull with a vertex in the middle of an edge fails") {
+  // What the hull of scaled grid points keeps when rounding hides that three are in a line.
+  const Polygon ring{{-1, -1}, {0, -1}, {1, -1}, {1, 1}, {-1, 1}};
+  Validator v;
+  v.grid(ring, ring, 0.1, 2.0);
+  CHECK(failures(v, Check::GridHull) == 1);
+}
+
 TEST("validate/a hull that misses a point, turns clockwise or invents a vertex fails") {
   Validator missing;
   missing.grid(kPoints, {{-1, -1}, {1, -1}, {-1, 1}}, 0.1, 2.0);

@@ -135,7 +135,7 @@ cmake --build build -j
 .\build\tests\ssk_tests.exe
 ```
 
-The generator is the only difference: MinGW needs naming, the default works elsewhere. 79
+The generator is the only difference: MinGW needs naming, the default works elsewhere. 80
 tests, a few seconds.
 
 ### 3. End to end
@@ -234,7 +234,7 @@ primitive, and `distance` bisects it. [`docs/frechet-distance.md`](docs/frechet-
 **`validate/`** checks the invariants our guarantee rests on while the algorithm runs — the
 grid polygon, every shadow, every emitted segment — and counts the outcomes instead of
 throwing, so a long run reports how many checks failed. It is off unless a validator is
-passed, because it costs about 1.8×.
+passed, because it costs 2–3.5×.
 
 ### `src/pipelines/` — the experiment
 

@@ -127,8 +127,11 @@ polygons stored as `std::vector<Vec>`.
   farthest corner (`far`), and keeps the cell when `near ≤ ρ/h < far`, meaning it reaches the
   ball without lying wholly inside it. The four corners of every kept cell are deduplicated and
   scaled by `h`.
-- **`hull(starts)` is `conv(G_v)`.** The boundary cells form a closed ring, so the hull of their
-  corners contains everything the ring encloses, including every interior cell.
+- **The hull of those corners is `conv(G_v)`.** The boundary cells form a closed ring, so the
+  hull of their corners contains everything the ring encloses, including every interior cell.
+- **The hull is taken in grid units and scaled by `h` afterwards.** Grid points in a line are
+  exactly in a line as integers and are not once scaled, so a hull taken after scaling kept
+  some of them as corners: 16 where there are 12, in one run at ε = 0.5.
 - **Both are offsets.** The grid moves with each vertex, so `G_v`, its hull and its starts are
   the same shapes translated, and they are built once and added to `v` when needed.
 
@@ -139,15 +142,12 @@ polygons stored as `std::vector<Vec>`.
    millionth of the coordinates themselves (Mopsi is degrees around 62, NGSIM is State Plane
    feet). The output is shifted back at the end.
 2. **`start(v, starts)`** makes one candidate `{p = v + offset, shadow = {p}}` per start.
-3. **`advance(cands, w, cells, r)`** builds `around = conv(G_w)` once and updates every
-   candidate:
-   - if `closest(shadow, p)` returns `p` itself, then `p` is in its shadow and the new shadow is
-     `around`. `contains` counts a point as inside only when it is clearly inside (by `1e-9`,
-     relative to the edge), because a point taken as inside can widen a shadow to all of
-     `conv(G_w)` or become an output vertex. A start judged outside when it is really inside is
-     harmless: the rays of `cover` then span the whole circle, and the result is `around`
-     anyway;
-   - otherwise the new shadow is `clip(around, cover(shadow, p, w, r))`;
+3. **`advance(cands, w, cells)`** builds `around = conv(G_w)` once and gives every candidate
+   the shadow `behind(around, shadow, p)`:
+   - if `p` is a vertex of its shadow, or clearly inside it, the new shadow is `around`. A
+     run's first step is the first case, with the shadow `{p}`;
+   - otherwise it is `around` cut by every edge that faces `p` and, if `p` is beyond one of
+     them, by the two tangents from `p`. The result is replaced by its hull;
    - a result with fewer than three vertices is dropped (see below).
 4. **If no candidate survives,** `emit_segment` uses the candidate list from **before** this
    vertex, which is the paper's buffer. It emits the start nearest the run's first vertex, then
@@ -155,25 +155,98 @@ polygons stored as `std::vector<Vec>`.
 5. **At the end,** emit the open run, or the last vertex alone if it has only just opened a run.
    `emit` skips a point equal to the previous one.
 
-### How `cover` builds `F` exactly where it matters
+### How `behind` builds `F`
 
-1. Measure the angle of every shadow vertex from `p`, relative to the direction of the
-   shadow's centroid. The extremes are the two tangent directions.
-2. Shoot rays from `p` across that range, at most 30° apart, each `1.3×` longer than the far
-   side of `D(w, r)`.
-3. Take the convex hull of the shadow and the ray tips.
+Seen from `p`, a convex shadow shows some of its edges and hides the rest. `F` is bounded by
+two things and nothing else:
 
-Every ray tip lies in `F`, so the hull lies in `F`. The chords between consecutive tips stay
-beyond `D(w, r) ⊇ conv(G_w)`, so after clipping to `around` the result is
-`conv(G_w) ∩ F` exactly. `clip` cuts `around` by each edge of the cover in turn
-(Sutherland–Hodgman).
+1. **The edges that face `p`.** Edge `a→b` of a counter-clockwise shadow faces `p` when `p` is
+   beyond its line: `cross(b − a, p − a) < 0`. `around` is cut by the line of each one.
+2. **The two tangents from `p`.** From outside, a convex shadow spans less than half a turn, so
+   "further left, seen from `p`" (`cross(a − p, b − p) > 0`) orders its vertices, and the two
+   extremes are where the tangents touch. `around` is cut by both lines.
+
+The edges facing away are the side `F` is open on. `around` is bounded, so that side needs no
+closing, and each cut is one pass of Sutherland–Hodgman.
+
+**Every step only cuts `around`.** A cut that was not needed costs area, and at worst a vertex
+of output. It cannot put a point in a shadow that does not belong there. That settles every
+doubtful case below: when in doubt, cut.
+
+**The hull at the end.** Clipping leaves repeated points and edges a few ulps long whose
+direction is rounding noise, and the next step would ask each of them whether it faces `p`.
+Every edge of a hull has the rest of the hull on its left, so each can be believed.
+
+**No angle is computed.** Both tests are signs of cross products. The version before this one
+built `F` as a polygon: the hull of the shadow and a fan of rays from `p`, at most 30° apart
+and 1.3× longer than the far side of the disk. That needed `atan2`, a rule for where the range
+of angles wraps, and a reach that kept the fan's chords clear of the disk.
+
+**Measured against that version** (2026-11-16), on samples of three datasets, 1 260 matched
+runs over five (dataset, ε) cells:
+
+| | |
+|---|---|
+| output vertex counts | equal in all 1 260 |
+| outputs identical to the bit | 1 114; of the other 146, 145 differ by at most 1.5e-12 δ |
+| the one real difference | `geolife-000005` at m1, δ = 6.1e-6°: two vertices moved, the larger by 0.18 δ; same count, same measured distance, within the bound |
+| over the bound, by the exact decision | 0 in either |
+| validation failures | 0 in 121 527 317 checks |
+| time, one process at a time, unvalidated | 1.5–1.8× faster: 4.3 s against 7.0 s on 12 Mopsi trajectories at ε = 0.5, 8.2 s against 15 s on 3 at ε = 0.1 |
+
+The times are of `ssk_match`, which also measures every output's Fréchet distance, so the
+algorithm alone gained more than that. Leaving out the final hull saved a further 5% and
+also validated cleanly, but it is what lets each edge's sign be trusted, so it stays.
+
+### When `p` is in its own shadow
+
+Then every point is behind it and the new shadow is all of `around`. This is the one step that
+enlarges a shadow, so it is taken only on certain grounds, and a sign is not one: which side of
+an edge `p` is on is rounding noise exactly when `p` is in line with the edge.
+
+| `p` is | known by | new shadow |
+|---|---|---|
+| a vertex of its shadow | equality of doubles | `around` |
+| clearly inside | no edge faces it, where an edge also faces a `p` within `1e-9` of its line, relative to the lengths involved | `around` |
+| beyond an edge | a negative cross product | `around` cut by the facing edges and by the two tangents |
+| on the boundary, or too near to say | no cross product negative, one or more within `1e-9` | `around` cut by the edges it is near |
+
+**The last row is the cautious reading.** In exact arithmetic a start on an edge of its shadow
+is in it, and would get all of `around`; here it gets `around` on the inner side of that edge.
+The tangents are left out because, from a point on an edge, they are that edge's own line.
+
+**Why equality matters.** A track standing still repeats a fix exactly. When `w` equals the
+vertex the run began at, `conv(G_w)` is the very hull the starts were taken from. At ε = 0.5,
+12 of the 120 starts are its corners and 20 more lie along its edges. A corner is the same
+double in the start and in the hull, so it is found without asking any cross product.
+
+**Finding the tangents near a corner.** From a `p` an ulp outside a flat corner of its shadow,
+the shadow spans almost half a turn, and "further left" between its two far ends is noise. The
+tangent vertices are therefore found on each side of the direction to the shadow's centre
+separately: every vertex right of it comes before every vertex left of it, and within one side
+the cross product orders them, since neither side spans half a turn.
+
+**Three things that did not work,** kept here because each looks simpler:
+
+- *Cutting by the tangents alone when no edge faces `p`.* From a point in or on the shadow the
+  vertices span half a turn or more and "further left" orders nothing. The cut leaves a corner
+  at `p` itself, recomputed an ulp off at every later step: 10 `shadow_behind` failures in
+  7.2 M on the GeoLife sample, all one start.
+- *Taking `p` as in its shadow whenever no cross product is negative.* With the hull taken
+  after scaling, the half-edge beyond a false corner is in line with the true corner next to
+  it, faced it by an ulp, and put that start outside its own shadow: 9 failures in 7.2 M. With
+  that fixed the count was zero, but the rule still errs outward on a shadow thin enough to be
+  in line with `p` along its whole length, where every sign is noise and `p` can be far away.
+- *Ordering all vertices by the cross product alone to find the tangents.* 32 `shadow_behind`
+  failures in 7.9 M on 40 Mopsi trajectories and 14 in 6.0 M on 3 DanceTrack ones, every one
+  with `p` within 1e-17 of a vertex of its shadow. Splitting at the centre direction: 0.
 
 ### Zero-area shadows
 
-A clip can leave a point or a segment where two polygons merely touch. The cover of such a
-shadow would be a whole line, not a ray, which is too large. Dropping these shadows keeps every
-approximation on the inside. It cannot cost the size bound, because Lemma 2's witness stabs
-balls strictly inside `conv(G_v)`, so its shadow always has area.
+A clip can leave a point or a segment where two polygons merely touch. Its hull has fewer than
+three vertices and it is dropped: a shadow without area has no edge that can say where `p` is.
+It cannot cost the size bound, because Lemma 2's witness stabs balls strictly inside
+`conv(G_v)`, so its shadow always has area.
 
 ### What differs from the paper
 
@@ -194,7 +267,7 @@ balls strictly inside `conv(G_v)`, so its shadow always has area.
 | grid | anchored at the coordinate origin, starts at cell centres | anchored at each vertex, starts at grid points |
 | starts | every cell centre within `(1+ε)δ`, about `8π(1+ε)²/ε²` | boundary cells, O(1/ε) |
 | shadow size | capped at 64 vertices, which shrinks shadows | uncapped (Theorem 3 bounds it) |
-| duplicate and collinear filter | yes | no |
+| duplicate and collinear filter | yes | every cut shadow is replaced by its hull |
 
 ### Starts per run
 
@@ -253,7 +326,7 @@ one small file per trajectory instead of every result.
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process every Nth trajectory, starting at I |
 | `--skip-existing` | off | skip a trajectory whose summary exists |
-| `--validate` | off | check the algorithm's invariants as it runs and count the outcomes, §8; about 1.8× the time |
+| `--validate` | off | check the algorithm's invariants as it runs and count the outcomes, §8; 2–3.5× the time |
 
 **It checks the guarantee as it goes.** Every run also takes the exact decision
 `Frechet::within(input, ours, (1+ε)·delta)`, with no tolerance, which costs about a ninth of the
@@ -430,12 +503,14 @@ roughly 4–5 GB per ε. That is an estimate from the sample.
 
 `src/algo/validate/` checks the invariants the guarantee rests on, as `ConvexShadow` produces
 the objects they are about. `ssk_match --validate` turns it on. It is off by default: a
-validated run takes about 1.8× as long (10.2 s against 18.3 s on 12 Mopsi trajectories at
-ε = 0.5).
+validated run takes 2–3.5× as long, more at small ε, where shadows have more vertices (9.7 s
+against 4.3 s on 12 Mopsi trajectories at ε = 0.5, 29.5 s against 8.2 s on 3 at ε = 0.1). It
+was 1.8× before `behind` replaced the ray fan; the checks cost what they did, the algorithm
+less.
 
 | check | when | what must hold |
 |---|---|---|
-| `grid_hull` | once per run | `conv(G_v)` is convex, counter-clockwise, contains every boundary grid point, and has only grid points as vertices |
+| `grid_hull` | once per run | `conv(G_v)` is convex, counter-clockwise, contains every boundary grid point, and has only grid points as vertices, none in line with its neighbours |
 | `grid_covers_ball` | once per run | it contains the ball of radius `(1+ε/2)δ`, so Lemma 2's witness fits inside |
 | `grid_inside_disk` | once per run | it lies in the disk of radius `(1+ε)δ`, which is the error bound |
 | `shadow_convex` | per candidate per vertex | the new `S[p]` is convex and counter-clockwise |
@@ -463,11 +538,21 @@ disagreement beyond rounding between the algorithm and an independent test of th
 property. `segment_stabs` is the one that states the guarantee directly; the others say where
 it broke. The exact Fréchet decision `within_bound` is still the final word on the output.
 
-**Measured so far**, at ε = 0.5: 0 failures in 5 611 890 checks on 12 Mopsi trajectories (246
-matches) and 0 in 21 706 918 on 5 GeoLife trajectories (112 matches). The first version of
-the checks reported 13 `shadow_behind` failures on the Mopsi sample; every one touched the
-previous shadow exactly and was the check believing an edge 1e-20 long, which is why such
-edges are now skipped.
+**Measured so far**, on the current build: 0 failures in 121 527 317 checks, over 40 Mopsi and
+12 GeoLife trajectories at ε = 0.5, 3 DanceTrack and 4 GeoLife at ε = 0.3, and 6 Mopsi at
+ε = 0.1 (1 260 matches).
+
+The failures it has found were all rounding, and all near a start that is a corner of its own
+shadow:
+
+- 13 `shadow_behind` on the Mopsi sample, in the checks' first version: the check believed an
+  edge 1e-20 long. Such edges are now skipped.
+- 10, then 9, on the GeoLife sample while `behind` was written: a start an ulp from its own
+  shadow's corner, put outside it by a bare sign or by a hull vertex that was not a corner.
+- 32 on Mopsi and 14 on DanceTrack: the tangents from a start an ulp from a flat corner.
+
+How each was resolved is in §4, *When `p` is in its own shadow*. None reached the output's
+bound: `segment_stabs` and `within_bound` stayed clean throughout.
 
 **Not checked:** that a shadow is *all* of `F ∩ conv(G_v)`, only that it lies in it. A shadow
 that is too small costs vertices, never the error bound, and Theorem 3's size bound is checked

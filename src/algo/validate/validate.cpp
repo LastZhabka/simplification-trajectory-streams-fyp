@@ -40,6 +40,20 @@ bool convex_ccw(const Polygon& poly) {
   return area > 0.0;
 }
 
+// No vertex lies in the line of its neighbours. A start on such a vertex would be in line with
+// the edge beside it, and which side of that edge it is on would be rounding noise.
+bool all_corners(const Polygon& poly) {
+  for (std::size_t i = 0; i < poly.size(); ++i) {
+    const Vec a = poly[i];
+    const Vec b = next_of(poly, i);
+    const Vec c = next_of(poly, i + 1);
+    if (cross(b - a, c - b) <= kSlack * length(b - a) * length(c - b)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Clipping leaves edges a few ulps long whose direction is rounding noise. Such an edge bounds
 // nothing its neighbours do not, so a test against it is skipped rather than believed.
 bool negligible(Vec edge, double reach) { return length(edge) < kSlack * reach; }
@@ -151,7 +165,7 @@ void Validator::record(Check check, bool ok) {
 void Validator::grid(const Polygon& points, const Polygon& hull, double rho, double r) {
   const bool convex = convex_ccw(hull);
   record(Check::GridHull,
-         convex &&
+         convex && all_corners(hull) &&
              std::all_of(points.begin(), points.end(),
                          [&](Vec q) { return inside_or_on(hull, q); }) &&
              std::all_of(hull.begin(), hull.end(), [&](Vec q) {
