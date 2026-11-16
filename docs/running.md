@@ -380,7 +380,7 @@ table does not need to open the simplification or the input to know what it is l
 
 ## 7. Run ours at each baseline's error
 
-`ssk_match` runs ours (`convex-shadow`) once per baseline document from step 6, at
+`ssk_match` runs ours once per baseline document from step 6, at
 `δ = d*/(1+ε)` where `d*` is that baseline's measured error. Ours is then guaranteed no worse
 than the baseline, and the question is how many vertices it needs. It measures ours and checks
 the bound exactly in the same pass. What it computes and why is in [algorithm.md](algorithm.md);
@@ -388,29 +388,37 @@ this is how to run it.
 
 It needs the build and step 6's `data/frechet-distances/`; a trajectory with no baseline
 document is skipped. **`--eps` is required**, and each value is its own run under its own root.
+
+**`--ours` picks the implementation**: `convex-shadow`, the default, or
+`convex-shadow-far-points`, its first implementation, kept for comparison. Each is also its own
+run, under `data/error-matched/<ours>/`. The commands below set it once at the top as `$ours`;
+to run the other, change that line and run them again.
+
 One dataset at all three ε, 8 processes at a time:
 
 ```powershell
+$ours = "convex-shadow"
 $ds = "mot-dancetrack"
 New-Item -ItemType Directory -Force data\error-matched | Out-Null
 foreach ($eps in "0.5", "0.3", "0.1") {
   $procs = 0..7 | ForEach-Object {
     Start-Process .\build\src\pipelines\error-match\ssk_match.exe -NoNewWindow -PassThru `
-      -ArgumentList "--in data\trajectories\$ds --eps $eps --shard $_ --shards 8 --skip-existing" `
-      -RedirectStandardOutput "data\error-matched\$ds-eps$eps-shard$_.log"
+      -ArgumentList "--in data\trajectories\$ds --ours $ours --eps $eps --shard $_ --shards 8 --skip-existing" `
+      -RedirectStandardOutput "data\error-matched\$ours-$ds-eps$eps-shard$_.log"
   }
   $procs | Wait-Process
 }
-Get-Content data\error-matched\$ds-eps*-shard*.log
+Get-Content data\error-matched\$ours-$ds-eps*-shard*.log
 ```
 
 ```sh
+ours=convex-shadow
 ds=mot-dancetrack
 mkdir -p data/error-matched
 for eps in 0.5 0.3 0.1; do
   seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/error-match/ssk_match \
-    --in data/trajectories/$ds --eps $eps --shard {} --shards 8 --skip-existing
-done 2>&1 | tee -a data/error-matched/$ds.log
+    --in data/trajectories/$ds --ours $ours --eps $eps --shard {} --shards 8 --skip-existing
+done 2>&1 | tee -a data/error-matched/$ours-$ds.log
 ```
 
 `Start-Process` works on PowerShell 5.1 and 7. Prefer it to `Start-Job` here: each job is a whole
@@ -420,13 +428,14 @@ For the corpus, wrap that in a loop over the datasets, one ε at a time so the c
 finish first:
 
 ```powershell
+$ours = "convex-shadow"
 New-Item -ItemType Directory -Force data\error-matched | Out-Null
 foreach ($eps in "0.5", "0.3", "0.1") {
   foreach ($ds in (Get-ChildItem data\trajectories -Directory).Name) {
     $procs = 0..7 | ForEach-Object {
       Start-Process .\build\src\pipelines\error-match\ssk_match.exe -NoNewWindow -PassThru `
-        -ArgumentList "--in data\trajectories\$ds --eps $eps --shard $_ --shards 8 --skip-existing" `
-        -RedirectStandardOutput "data\error-matched\$ds-eps$eps-shard$_.log"
+        -ArgumentList "--in data\trajectories\$ds --ours $ours --eps $eps --shard $_ --shards 8 --skip-existing" `
+        -RedirectStandardOutput "data\error-matched\$ours-$ds-eps$eps-shard$_.log"
     }
     $procs | Wait-Process
   }
@@ -434,24 +443,30 @@ foreach ($eps in "0.5", "0.3", "0.1") {
 ```
 
 ```sh
+ours=convex-shadow
 mkdir -p data/error-matched
 for eps in 0.5 0.3 0.1; do
   for ds in data/trajectories/*/; do
     ds=$(basename "$ds")
     seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/error-match/ssk_match \
-      --in data/trajectories/$ds --eps $eps --shard {} --shards 8 --skip-existing \
-      2>&1 | tee -a data/error-matched/$ds.log
+      --in data/trajectories/$ds --ours $ours --eps $eps --shard {} --shards 8 --skip-existing \
+      2>&1 | tee -a data/error-matched/$ours-$ds.log
   done
 done
 ```
+
+Running both implementations doubles step 7. If time is short, run `convex-shadow` on the
+whole corpus and `convex-shadow-far-points` on one dataset at one ε: the two give the same
+vertex count on every sample checked so far (§4 of [algorithm.md](algorithm.md)), and that
+dataset is enough to confirm it.
 
 It is resumable as a whole: run it again and finished trajectories are skipped.
 
 Each shard ends with:
 
 ```
-mot-dancetrack eps=0.5: 87 trajectories -> 1553 matches over 1337209 points in 1156.1 s
-  out: data/error-matched/eps0.5/{<algorithm>,summary}/mot-dancetrack/
+convex-shadow mot-dancetrack eps=0.5: 87 trajectories -> 1553 matches over 1337209 points in 1156.1 s
+  out: data/error-matched/convex-shadow/eps0.5/{<algorithm>,summary}/mot-dancetrack/
 ```
 
 On a resume it adds `N already done, skipped`. A run that breaks the bound adds
@@ -485,18 +500,18 @@ the trajectory each shard was on. The shard count may change between runs.
 
 **Check before reading the results:**
 
-- **Summaries:** each ε has one per trajectory in the dataset.
+- **Summaries:** each implementation at each ε has one per trajectory in the dataset.
 - **Logs:** no `over (1+eps)*delta` line.
-- **Coverage:** in step 8's coverage table, each `ours eps=E` cell is the sum of the three
+- **Coverage:** in step 8's coverage table, each `<ours> eps=E` cell is the sum of the four
   baselines in its row.
 
 ```powershell
-(Get-ChildItem data\error-matched\eps0.5\summary\mot-dancetrack).Count
+(Get-ChildItem data\error-matched\convex-shadow\eps0.5\summary\mot-dancetrack).Count
 Select-String -Path data\error-matched\*-shard*.log -Pattern "over \(1\+eps\)"
 ```
 
 ```sh
-ls data/error-matched/eps0.5/summary/mot-dancetrack | wc -l
+ls data/error-matched/convex-shadow/eps0.5/summary/mot-dancetrack | wc -l
 grep "over (1+eps)" data/error-matched/*.log
 ```
 
@@ -588,11 +603,11 @@ Ours' results from step 7 are trajectory documents too. They carry their own `fr
 with `bound` and `within_bound`, so the panel shows whether the guarantee held:
 
 ```powershell
-python src\viz\plot.py data\error-matched\eps0.5\dots\mot-dancetrack\m3\mot-000001.json -o data\renders\ours.png
+python src\viz\plot.py data\error-matched\convex-shadow\eps0.5\dots\mot-dancetrack\m3\mot-000001.json -o data\renders\ours.png
 ```
 
 ```sh
-python src/viz/plot.py data/error-matched/eps0.5/dots/mot-dancetrack/m3/mot-000001.json \
+python src/viz/plot.py data/error-matched/convex-shadow/eps0.5/dots/mot-dancetrack/m3/mot-000001.json \
                        -o data/renders/ours.png
 ```
 
@@ -630,7 +645,7 @@ python src\viz\plot.py data\renders\overlay.json -o data\renders\overlay.png
 python src/viz/plot.py data/renders/overlay.json -o data/renders/overlay.png
 ```
 
-For one of ours, load it from `data/error-matched/eps<E>/<algorithm>/...` as `res`, and drop
+For one of ours, load it from `data/error-matched/<ours>/eps<E>/<algorithm>/...` as `res`, and drop
 the `fr` and `res["frechet"]` lines: it already has its `frechet`, and only `input_points` is
 missing.
 

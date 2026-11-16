@@ -1,8 +1,10 @@
 """Distribution of our compression rate at each baseline's error, per baseline and m.
 
     python src/viz/compression.py --out "data/error-matched/[2026-10-29] Results - Compression rate distribution"
+                                  [--ours convex-shadow]
 
-Reads every <matched>/eps<E>/summary/<dataset>/<name>.json that ssk_match wrote. For each eps
+Reads every <matched>/<ours>/eps<E>/summary/<dataset>/<name>.json that ssk_match wrote, for
+one implementation of ours: convex-shadow unless --ours names another. For each eps
 it draws one PNG: a grid of histograms, a row per baseline and a column per m, of n/|ours|
 over every trajectory, with the baseline's median n/|theirs| marked. Then it writes <out>.md
 with the same distributions as tables, the gain over the baseline, and coverage per dataset.
@@ -54,8 +56,8 @@ def read(path: str) -> list[dict]:
             for p in doc["pairs"]]
 
 
-def load(root: str) -> list[dict]:
-    paths = sorted(glob.glob(os.path.join(root, "eps*", "summary", "*", "*.json")))
+def load(root: str, ours: str) -> list[dict]:
+    paths = sorted(glob.glob(os.path.join(root, ours, "eps*", "summary", "*", "*.json")))
     with ProcessPoolExecutor() as pool:
         return [row for rows in pool.map(read, paths, chunksize=256) for row in rows]
 
@@ -88,7 +90,7 @@ def nice_ticks(lo: float, hi: float) -> list[float]:
     return [lo, hi]
 
 
-def histograms(rows: list[dict], eps: float, out: Path) -> None:
+def histograms(rows: list[dict], ours: str, eps: float, out: Path) -> None:
     # Sized for the report form's 5 in cell, so one file serves the note and the report.
     plt.rcParams.update({"font.size": 6, "axes.titlesize": 6.5, "axes.labelsize": 6})
     cells = group(rows, "algorithm", "m")
@@ -99,6 +101,11 @@ def histograms(rows: list[dict], eps: float, out: Path) -> None:
             ax = axes[row][col]
             ax.set_facecolor(SURFACE)
             cell = cells[a, m]
+            if not cell:
+                # A baseline with no run at this rate: its budget floor is above N/2^m for every
+                # trajectory here, which happens on a small sample.
+                ax.axis("off")
+                continue
             rates = [ours_rate(r) for r in cell]
             theirs = median(theirs_rate(r) for r in cell)
             lo, hi = quantiles(rates, (0.005, 0.995))
@@ -130,7 +137,7 @@ def histograms(rows: list[dict], eps: float, out: Path) -> None:
     fig.supxlabel("ours: n / output size, log scale; dashed line: the baseline's median "
                   "n / output size", fontsize=6, color=INK_SECONDARY)
     fig.suptitle(f"Our compression rate at each baseline's measured Fréchet error, "
-                 f"eps = {eps}", fontsize=7, color=INK, x=0.01, ha="left")
+                 f"{ours}, eps = {eps}", fontsize=7, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0, 1, 0.97), h_pad=0.6, w_pad=0.4)
     fig.savefig(out, dpi=300, facecolor=SURFACE)
     plt.close(fig)
@@ -183,11 +190,12 @@ def by_dataset_rows(rows: list[dict], datasets: list[str]) -> list[list]:
     return out
 
 
-def report(rows: list[dict], out: Path, trajectories: dict[str, int]) -> str:
+def report(rows: list[dict], out: Path, trajectories: dict[str, int], ours: str) -> str:
     eps_values = sorted({r["eps"] for r in rows})
     datasets = sorted({r["dataset"] for r in rows})
     lines = [f"# {out.name}", "",
-             "How many vertices ours needs at each baseline's own measured Fréchet error.",
+             f"How many vertices ours, `{ours}`, needs at each baseline's own measured Fréchet "
+             "error.",
              "Ours runs at delta = d*/(1+eps), so its guarantee is exactly the baseline's error d*,"
              " and the compression rate is n / output size.", "",
              "- **theirs median**: the baseline's n / output size. It is set by the budget "
@@ -267,18 +275,20 @@ def report(rows: list[dict], out: Path, trajectories: dict[str, int]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--matched", default=os.path.join("data", "error-matched"))
+    parser.add_argument("--ours", default="convex-shadow", help="which implementation of ours")
     parser.add_argument("--trajectories", default=os.path.join("data", "trajectories"))
     parser.add_argument("--out", required=True, help="path prefix for the .md and the PNGs")
     args = parser.parse_args()
 
-    rows = load(args.matched)
+    rows = load(args.matched, args.ours)
     out = Path(args.out)
     for eps in sorted({r["eps"] for r in rows}):
-        histograms([r for r in rows if r["eps"] == eps], eps, Path(f"{out} eps{eps}.png"))
+        histograms([r for r in rows if r["eps"] == eps], args.ours, eps,
+                   Path(f"{out} eps{eps}.png"))
     trajectories = {d.name: len(list(d.glob("*.json")))
                     for d in Path(args.trajectories).iterdir() if d.is_dir()}
     with open(f"{out}.md", "w", encoding="utf-8") as f:
-        f.write(report(rows, out, trajectories))
+        f.write(report(rows, out, trajectories, args.ours))
     print(f"written: {out}.md and {len({r['eps'] for r in rows})} PNGs")
 
 

@@ -57,7 +57,7 @@ cmake --build build -j
 .\build\tests\ssk_tests.exe [name-filter]
 .\build\src\pipelines\simplify-sweep\ssk_simplify.exe --in data\trajectories\mopsi --out data\simplified-trajectories
 .\build\src\pipelines\frechet-distance\ssk_frechet.exe --in data\trajectories\mopsi --out data\frechet-distances
-.\build\src\pipelines\error-match\ssk_match.exe --in data\trajectories\mopsi --eps 0.5 [--validate]
+.\build\src\pipelines\error-match\ssk_match.exe --in data\trajectories\mopsi --eps 0.5 [--ours NAME] [--validate]
 python scripts\comparison_stats.py --matched data\error-matched
 ```
 
@@ -77,7 +77,7 @@ cmake --build build -j
 ./build/tests/ssk_tests [name-filter]
 ./build/src/pipelines/simplify-sweep/ssk_simplify --in data/trajectories/mopsi --out data/simplified-trajectories
 ./build/src/pipelines/frechet-distance/ssk_frechet --in data/trajectories/mopsi --out data/frechet-distances
-./build/src/pipelines/error-match/ssk_match --in data/trajectories/mopsi --eps 0.5 [--validate]
+./build/src/pipelines/error-match/ssk_match --in data/trajectories/mopsi --eps 0.5 [--ours NAME] [--validate]
 python scripts/comparison_stats.py --matched data/error-matched
 ```
 

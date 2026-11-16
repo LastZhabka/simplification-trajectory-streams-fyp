@@ -303,28 +303,33 @@ tolerance (`1e-9` of the bounding-box diagonal) that `ssk_frechet` used on the b
 protocol reports measured error on both sides, and measuring here saves reading 786 642
 results back from disk.
 
-**It writes**, under a root per ε:
+**It runs one implementation of ours**, named by `--ours`: `convex-shadow`, the default, or
+`convex-shadow-far-points`, its first implementation (§4, *How `behind` builds F*). Each is its
+own run, as each ε is, so the two can be compared on the same baseline operating points.
+
+**It writes**, under a root per implementation and ε:
 
 ```
-data/error-matched/eps<E>/<algorithm>/<dataset>/m<rate>/<name>.json   ours, one per baseline run
-data/error-matched/eps<E>/summary/<dataset>/<name>.json               every pair's numbers
+data/error-matched/<ours>/eps<E>/<algorithm>/<dataset>/m<rate>/<name>.json   one per baseline run
+data/error-matched/<ours>/eps<E>/summary/<dataset>/<name>.json               every pair's numbers
 ```
 
 Here `<algorithm>` is the baseline matched against. Each result is a trajectory document, so
 `io::read_trajectory` and `viz/plot.py` read it directly. It holds the points (no `t`, since
-ours invents its vertices), `algorithm: "convex-shadow"`, `mode: "error-matched"`,
+ours invents its vertices), `algorithm` (the implementation's name), `mode: "error-matched"`,
 `params {delta, eps}`, `stats {input_size, output_size, compression}`, its own
 `frechet {distance, tolerance, bound, within_bound, computer}`, and under `matched` the
 baseline document's `algorithm`, `params`, `stats`, `frechet` and `simplified`.
 
-The **summary** holds one entry per pair, with the baseline's `output_size`, `target`,
-`algorithm_runs`, `distance` and `tolerance` beside ours. It exists so that the statistics read
-one small file per trajectory instead of every result.
+The **summary** names the implementation in `ours` and holds one entry per pair, with the
+baseline's `output_size`, `target`, `algorithm_runs`, `distance` and `tolerance` beside ours.
+It exists so that the statistics read one small file per trajectory instead of every result.
 
 | Flag | Default | What |
 |---|---|---|
 | `--in DIR` | required | a dataset directory of trajectory documents |
 | `--eps E` | required | ours alone, so each value is its own run, and a result must say which it used |
+| `--ours NAME` | `convex-shadow` | which implementation of ours; `convex-shadow-far-points` is the other |
 | `--distances DIR` | `data/frechet-distances` | the baselines' measurements |
 | `--out DIR` | `data/error-matched` | root of the result tree |
 | `--tol REL` | `1e-9` | Fréchet bisection tolerance, relative to the input's diagonal, as in `ssk_frechet` |
@@ -386,16 +391,18 @@ without the loop:
 ## 6. The statistics: `scripts/comparison_stats.py`
 
 The script uses the standard library only, so it needs no venv. It reads every
-`eps*/summary/<dataset>/<name>.json`, spreading the reading over one process per core
-(`--jobs N`), and prints the following.
+`<ours>/eps*/summary/<dataset>/<name>.json`, spreading the reading over one process per core
+(`--jobs N`). A **run** is one implementation at one ε, labelled `<ours> eps=<E>`, and every
+table below has a row or column per run, so the implementations sit side by side. It prints
+the following.
 
 **Per dataset:**
 
-- **coverage**: trajectories in each (rate, baseline) cell, and our matches beside them. This
+- **coverage**: trajectories in each (rate, baseline) cell, and each run's matches beside them. This
   is the per-cell count comparison.md asks for, which shows where a baseline is missing;
 - **fixed rate**: each baseline's median measured error at `N/2^m`, which is the headline
   table, plus how often DOTS hit its budget exactly and how many runs its search took;
-- **matched**, per ε: for each (baseline, m),
+- **matched**, per run: for each (baseline, m),
   - the median of our size over theirs;
   - the share of runs where ours is smaller, equal or larger;
   - the median of our measured error over theirs;
@@ -405,14 +412,14 @@ The script uses the standard library only, so it needs no venv. It reads every
 **Pooled over all datasets:** the matched table again, ratios only, since errors are in each
 dataset's own units.
 
-**Theorem 3, checked**, per ε:
+**Theorem 3, checked**, per run:
 
 - **Error.** A pair violates the bound when its exact decision `within_bound` is false. The
   table also shows the worst `(distance − tolerance) / bound`, which is how far over the bound a
   run certainly is.
 - **Size.** `κ(τ, delta)` is bounded from above by the input and by every curve on disk that is
   certainly within `delta`. Every stored distance is the top of a bisection, so each one is a
-  certificate: each baseline counts, and so does ours at any ε. A pair is a certain violation
+  certificate: each baseline counts, and so does every run of ours. A pair is a certain violation
   when ours exceeds `2κ − 2` under that bound.
 - **What a pass means.** κ is only bounded from above, so passing does not prove the size
   bound; failing does break it.
@@ -422,7 +429,7 @@ budgets by a search, ours does not keep a subsequence, errors are per-dataset un
 not scored.
 
 Everything above, plus a **rate–distortion curve** per algorithm (median compression and
-median error per rate, with ours per ε and per matched baseline), is written as JSON to
+median error per rate, with ours per run and per matched baseline), is written as JSON to
 `--out`, by default `<matched>/comparison.json`.
 
 ```powershell

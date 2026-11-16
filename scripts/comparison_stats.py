@@ -2,12 +2,13 @@
 
     python scripts/comparison_stats.py [--matched data/error-matched] [--out FILE] [--jobs N]
 
-Reads every <matched>/eps<E>/summary/<dataset>/<name>.json -- one per trajectory per eps, each
-baseline operating point beside our run at its error -- and prints, per dataset:
+Reads every <matched>/<ours>/eps<E>/summary/<dataset>/<name>.json -- one per trajectory per
+implementation of ours per eps, each baseline operating point beside our run at its error. A
+run is one implementation at one eps, labelled "<ours> eps=<E>". Prints, per dataset:
 
-  coverage    trajectories in each (rate, algorithm) cell, and our matches beside them
+  coverage    trajectories in each (rate, algorithm) cell, and each run's matches beside them
   fixed rate  each baseline's measured error at a budget of N/2^m: the headline table
-  matched     ours at each baseline's error, per eps: size and error against the baseline's,
+  matched     ours at each baseline's error, per run: size and error against the baseline's,
               and Pareto dominance in both directions
 
 then the same matched table pooled over every dataset, and the paper's Theorem 3 checked: error
@@ -37,26 +38,32 @@ NOTES = (
 )
 
 
+def label(ours, eps):
+    return f"{ours} eps={eps}"
+
+
 def read(path):
     with open(path, encoding="utf-8") as f:
         doc = json.load(f)
+    run = label(doc["ours"], doc["eps"])
     pairs = [{"dataset": doc["dataset"], "source": doc["source"], "n": doc["input_size"],
-              "eps": doc["eps"], **pair} for pair in doc["pairs"]]
-    return pairs, doc["eps"], doc.get("validation")
+              "ours_name": doc["ours"], "eps": doc["eps"], "run": run, **pair}
+             for pair in doc["pairs"]]
+    return pairs, run, doc.get("validation")
 
 
 def load(root, jobs):
-    # One small file per trajectory per eps, so reading is the cost; spread it over processes.
-    paths = sorted(glob.glob(os.path.join(root, "eps*", "summary", "*", "*.json")))
+    # One small file per trajectory per run, so reading is the cost; spread it over processes.
+    paths = sorted(glob.glob(os.path.join(root, "*", "eps*", "summary", "*", "*.json")))
     pairs = []
     validation = defaultdict(lambda: defaultdict(lambda: {"checked": 0, "failed": 0}))
     with ProcessPoolExecutor(jobs) as pool:
-        for rows, eps, validated in pool.map(read, paths, chunksize=256):
+        for rows, run, validated in pool.map(read, paths, chunksize=256):
             pairs += rows
             for check, count in (validated or {}).get("checks", {}).items():
-                validation[eps][check]["checked"] += count["checked"]
-                validation[eps][check]["failed"] += count["failed"]
-    return pairs, {eps: dict(checks) for eps, checks in sorted(validation.items())}
+                validation[run][check]["checked"] += count["checked"]
+                validation[run][check]["failed"] += count["failed"]
+    return pairs, {run: dict(checks) for run, checks in sorted(validation.items())}
 
 
 def group(rows, *keys):
@@ -112,12 +119,12 @@ def bounds(pairs, base):
         known[p["source"]].append((p["ours"]["distance"], p["ours"]["output_size"]))
 
     out = {}
-    for (eps,), rows in sorted(group(pairs, "eps").items()):
+    for (run,), rows in sorted(group(pairs, "run").items()):
         error_over = size_over = tighter = 0
         worst_error = worst_size = 0.0
         for r in rows:
             ours = r["ours"]
-            bound = (1 + eps) * ours["delta"]
+            bound = (1 + r["eps"]) * ours["delta"]
             error_over += not ours["within_bound"]
             # The bisection's answer is at most a tolerance above the truth, so this is how far
             # over the bound a run certainly is; at or below 1 means not at all.
@@ -128,7 +135,7 @@ def bounds(pairs, base):
             limit = 2 * max(kappa, 2) - 2
             size_over += ours["output_size"] > limit
             worst_size = max(worst_size, ours["output_size"] / limit)
-        out[eps] = {"pairs": len(rows), "error_over": error_over, "worst_error": worst_error,
+        out[run] = {"pairs": len(rows), "error_over": error_over, "worst_error": worst_error,
                     "size_over": size_over, "worst_size": worst_size, "kappa_bounded": tighter}
     return out
 
@@ -164,10 +171,10 @@ def main():
 
     pairs, validation = load(args.matched, args.jobs)
     if not pairs:
-        sys.exit(f"no summaries under {args.matched}/eps*/summary/ -- run ssk_match first")
-    # Each baseline operating point appears once per eps; it is one operating point.
+        sys.exit(f"no summaries under {args.matched}/*/eps*/summary/ -- run ssk_match first")
+    # Each baseline operating point appears once per run; it is one operating point.
     base = list({(p["source"], p["algorithm"], p["m"]): p for p in pairs}.values())
-    eps_values = sorted({p["eps"] for p in pairs})
+    runs = [label(o, e) for o, e in sorted({(p["ours_name"], p["eps"]) for p in pairs})]
     report = {"datasets": {}, "pooled": {}, "bounds": bounds(pairs, base),
               "validation": validation, "notes": NOTES}
 
@@ -176,30 +183,30 @@ def main():
         rates = sorted({r["m"] for r in rows})
         cells = group(rows, "m", "algorithm")
         fixed = {(m, a): fixed_rate(c) for (m, a), c in cells.items()}
-        by_eps = {eps: sorted(((a, m), matched(c)) for (a, m), c in
-                              group([p for p in ours if p["eps"] == eps], "algorithm", "m").items())
-                  for eps in eps_values}
+        by_run = {run: sorted(((a, m), matched(c)) for (a, m), c in
+                              group([p for p in ours if p["run"] == run], "algorithm", "m").items())
+                  for run in runs}
         report["datasets"][dataset] = {
             "fixed_rate": {f"{SHORT[a]} m{m}": s for (m, a), s in fixed.items()},
-            "matched": {f"eps={eps}": {f"{SHORT[a]} m{m}": s for (a, m), s in stats}
-                        for eps, stats in by_eps.items()},
+            "matched": {run: {f"{SHORT[a]} m{m}": s for (a, m), s in stats}
+                        for run, stats in by_run.items()},
             "curves": {
                 "baselines": {SHORT[a]: curve(c, lambda r: r["baseline"]["output_size"],
                                               lambda r: r["baseline"]["distance"])
                               for (a,), c in group(rows, "algorithm").items()},
-                "ours": {f"eps={eps}": {SHORT[a]: curve(c, lambda r: r["ours"]["output_size"],
-                                                        lambda r: r["ours"]["distance"])
-                                        for (a,), c in group([p for p in ours if p["eps"] == eps],
-                                                             "algorithm").items()}
-                         for eps in eps_values},
+                "ours": {run: {SHORT[a]: curve(c, lambda r: r["ours"]["output_size"],
+                                               lambda r: r["ours"]["distance"])
+                               for (a,), c in group([p for p in ours if p["run"] == run],
+                                                    "algorithm").items()}
+                         for run in runs},
             },
         }
 
         print(f"\n## {dataset}\n\n### Coverage: trajectories per cell\n")
-        matches = group(ours, "m", "eps")
-        print(table(["m"] + [SHORT[a] for a in ALGORITHMS] + [f"ours eps={e}" for e in eps_values],
+        matches = group(ours, "m", "run")
+        print(table(["m"] + [SHORT[a] for a in ALGORITHMS] + runs,
                     [[m] + [len(cells.get((m, a), [])) for a in ALGORITHMS]
-                     + [len(matches.get((m, e), [])) for e in eps_values] for m in rates]))
+                     + [len(matches.get((m, run), [])) for run in runs] for m in rates]))
 
         print("\n### Fixed rate: median measured error (dataset units)\n")
         print(table(["m", "rate"] + [SHORT[a] for a in ALGORITHMS] + ["DOTS exact", "DOTS runs"],
@@ -211,31 +218,31 @@ def main():
                         if (m, "dots") in fixed else ["-", "-"])
                      for m in rates]))
 
-        for eps, stats in by_eps.items():
-            print(f"\n### Ours at each baseline's error, eps={eps}\n")
+        for run, stats in by_run.items():
+            print(f"\n### Ours at each baseline's error, {run}\n")
             print(table(MATCHED_HEADER, matched_rows(stats)))
 
-    for eps in eps_values:
+    for run in runs:
         stats = sorted(((a, m), matched(c)) for (a, m), c in
-                       group([p for p in pairs if p["eps"] == eps], "algorithm", "m").items())
-        report["pooled"][f"eps={eps}"] = {f"{SHORT[a]} m{m}": s for (a, m), s in stats}
-        print(f"\n## All datasets, eps={eps} (ratios only)\n")
+                       group([p for p in pairs if p["run"] == run], "algorithm", "m").items())
+        report["pooled"][run] = {f"{SHORT[a]} m{m}": s for (a, m), s in stats}
+        print(f"\n## All datasets, {run} (ratios only)\n")
         print(table(MATCHED_HEADER, matched_rows(stats)))
 
     print("\n## Theorem 3, checked\n")
-    print(table(["eps", "pairs", "over (1+eps)delta", "worst certain d/bound", "kappa bounded by a curve",
+    print(table(["run", "pairs", "over (1+eps)delta", "worst certain d/bound", "kappa bounded by a curve",
                  "over 2kappa-2", "worst size/bound"],
-                [[eps, b["pairs"], b["error_over"], f"{b['worst_error']:.9f}", b["kappa_bounded"],
+                [[run, b["pairs"], b["error_over"], f"{b['worst_error']:.9f}", b["kappa_bounded"],
                   b["size_over"], f"{b['worst_size']:.3f}"]
-                 for eps, b in report["bounds"].items()]))
+                 for run, b in report["bounds"].items()]))
     print("\nkappa is only bounded from above here, so passing the size check does not prove "
           "the bound; failing it does break it.")
 
     if validation:
         print("\n## Validation: the algorithm's invariants, checked as it ran\n")
-        print(table(["eps", "check", "checked", "failed"],
-                    [[eps, check, count["checked"], count["failed"]]
-                     for eps, checks in validation.items() for check, count in checks.items()]))
+        print(table(["run", "check", "checked", "failed"],
+                    [[run, check, count["checked"], count["failed"]]
+                     for run, checks in validation.items() for check, count in checks.items()]))
         print("\nOnly runs made with `ssk_match --validate` are counted.")
 
     print("\n## Notes\n")

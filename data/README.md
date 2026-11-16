@@ -9,7 +9,8 @@ downloads/                the datasets exactly as fetched, in their own formats 
 trajectories/             those datasets converted to our format, by trajio
 simplified-trajectories/  every baseline at every compression rate, by ssk_simplify
 frechet-distances/        the measured error of each of those, by ssk_frechet
-error-matched/            ours at each baseline's error, and the summaries, by ssk_match
+error-matched/            ours at each baseline's error, and the summaries, by ssk_match;
+                          one tree per implementation of ours
 synthetic/                generated test curves, by src/viz/generate.py
 renders/                  images, by src/viz/plot.py
 ```

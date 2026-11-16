@@ -246,7 +246,7 @@ Four binaries, run in this order, each reading the tree the one before wrote:
 |---|---|---|
 | `ssk_simplify` | `data/trajectories/<dataset>` | `data/simplified-trajectories/<algorithm>/<dataset>/m<rate>/<name>.json` |
 | `ssk_frechet` | the two above | `data/frechet-distances/<algorithm>/<dataset>/m<rate>/<name>.json` |
-| `ssk_match` | trajectories and distances | `data/error-matched/eps<E>/{<algorithm>,summary}/<dataset>/...` |
+| `ssk_match` | trajectories and distances | `data/error-matched/<ours>/eps<E>/{<algorithm>,summary}/<dataset>/...` |
 | `ssk_audit` | trajectories and simplifications | nothing; reports documents that are not a subsequence of their input |
 
 ```sh
@@ -273,11 +273,14 @@ mirrors the first one document for document.
 **`ssk_match`** runs ours once per baseline document, at `δ = d*/(1+ε)` where `d*` is that
 baseline's measured error. Ours is then no worse than the baseline, and the question is how
 many vertices it needs. It measures ours in the same pass, checks the bound exactly, and with
-`--validate` counts the invariant checks into every result.
+`--validate` counts the invariant checks into every result. `--ours` picks the implementation,
+`convex-shadow` by default or `convex-shadow-far-points`, and each gets its own tree.
 
 **`scripts/comparison_stats.py`** turns the summaries into the tables: coverage, each
 baseline's error at a fixed rate, ours against each baseline, Theorem 3 checked, and the
-validation counts. `src/viz/compression.py` draws the distribution of our compression rate.
+validation counts, with each implementation of ours at each ε as its own run.
+`src/viz/compression.py` draws the distribution of our compression rate for one
+implementation, `--ours`.
 
 The first three take `--shard I --shards N` to split a dataset across processes and
 `--limit N` to stop early; `ssk_frechet` and `ssk_match` take `--skip-existing` to resume. A document is

@@ -1,9 +1,11 @@
 #include "match.hpp"
 
+#include <memory>
 #include <stdexcept>
 #include <utility>
 
 #include "simplify/convex_shadow.hpp"
+#include "simplify/convex_shadow_far_points.hpp"
 
 namespace ssk::pipelines {
 namespace {
@@ -14,6 +16,18 @@ const json::Value& field(const json::Value& doc, const char* key) {
     throw std::runtime_error(std::string("error-match: baseline document has no '") + key + "'");
   }
   return *value;
+}
+
+std::unique_ptr<simplify::Simplifier<2>> make_ours(const std::string& ours,
+                                                   const simplify::Params& params,
+                                                   validate::Validator* validator) {
+  if (ours == "convex-shadow") {
+    return std::make_unique<simplify::ConvexShadow>(params, validator);
+  }
+  if (ours == "convex-shadow-far-points") {
+    return std::make_unique<simplify::ConvexShadowFarPoints>(params, validator);
+  }
+  throw std::runtime_error("error-match: no implementation of ours named '" + ours + "'");
 }
 
 // `bound` and `within_bound` are what viz/plot.py reports.
@@ -44,14 +58,16 @@ json::Value validation_to_json(const validate::Stats& stats) {
   };
 }
 
-Match match(const frechet::Frechet<2>& computer, const simplify::Curve<2>& input,
-            json::Value baseline, double eps, double relative_tol, bool validate) {
+Match match(const frechet::Frechet<2>& computer, const std::string& ours,
+            const simplify::Curve<2>& input, json::Value baseline, double eps,
+            double relative_tol, bool validate) {
   Match out;
+  out.ours = ours;
   out.delta = field(field(baseline, "frechet"), "distance").num() / (1.0 + eps);
   validate::Validator validator;
   out.simplified =
-      simplify::ConvexShadow({{"delta", out.delta}, {"eps", eps}}, validate ? &validator : nullptr)
-          .simplify(input);
+      make_ours(ours, {{"delta", out.delta}, {"eps", eps}}, validate ? &validator : nullptr)
+          ->simplify(input);
   if (validate) {
     out.validation = validator.stats();
   }
@@ -81,7 +97,7 @@ json::Value match_to_json(const io::Document& input, const std::string& dataset,
   json::Object out{
       {"dim", json::Value(input.dim)},
       {"points", io::points_to_json(points)},
-      {"algorithm", json::Value("convex-shadow")},
+      {"algorithm", json::Value(match.ours)},
       {"mode", json::Value("error-matched")},
       {"params", json::Object{{"delta", json::Value(match.delta)}, {"eps", json::Value(eps)}}},
       {"stats", json::Object{{"input_size", json::Value(n)},
@@ -103,7 +119,7 @@ json::Value match_to_json(const io::Document& input, const std::string& dataset,
 }
 
 json::Value summary_to_json(const io::Document& input, const std::string& dataset,
-                            const std::string& source, double eps,
+                            const std::string& source, const std::string& ours, double eps,
                             const std::vector<Match>& matches) {
   json::Array pairs;
   for (const Match& match : matches) {
@@ -128,6 +144,7 @@ json::Value summary_to_json(const io::Document& input, const std::string& datase
       {"dataset", json::Value(dataset)},
       {"source", json::Value(source)},
       {"name", json::Value(input.name)},
+      {"ours", json::Value(ours)},
       {"eps", json::Value(eps)},
       {"input_size", json::Value(input.points.size())},
       {"pairs", json::Value(std::move(pairs))},

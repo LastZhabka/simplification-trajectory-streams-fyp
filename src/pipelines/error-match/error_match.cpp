@@ -1,21 +1,24 @@
 // Run ours at every baseline operating point that ssk_frechet measured.
 //
-//   ssk_match --in data/trajectories/mopsi --eps 0.1
+//   ssk_match --in data/trajectories/mopsi --eps 0.1 [--ours convex-shadow]
 //             [--distances data/frechet-distances] [--out data/error-matched]
 //
 // writes, for each trajectory,
 //
-//   data/error-matched/eps0.1/<algorithm>/mopsi/m<rate>/<name>.json   ours, one per baseline run
-//   data/error-matched/eps0.1/summary/mopsi/<name>.json               the numbers of all of them
+//   data/error-matched/<ours>/eps0.1/<algorithm>/mopsi/m<rate>/<name>.json   one per baseline run
+//   data/error-matched/<ours>/eps0.1/summary/mopsi/<name>.json               the numbers of all
 //
-// where <algorithm> is the baseline matched against. --eps is required: it is ours alone, so
-// each value is its own run, and a result that does not say which eps produced it cannot be
-// reproduced. The summary is written last, so with --skip-existing a trajectory that has one
-// is finished, and an interrupted run resumes where it stopped.
+// where <ours> is the implementation run, one of pipelines::kOurs, and <algorithm> the
+// baseline matched against. --eps is required: it is ours alone, so each value is its own run,
+// and a result that does not say which eps produced it cannot be reproduced. Likewise each
+// implementation is its own run, under its own root. The summary is written last, so with
+// --skip-existing a trajectory that has one is finished, and an interrupted run resumes where
+// it stopped.
 //
 // --validate checks the algorithm's invariants as it runs (src/algo/validate) and puts the
 // counts in every result, in the summary and in the closing lines. It is off by default
 // because it costs time.
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -34,6 +37,7 @@ namespace {
 
 struct Options {
   std::string in;
+  std::string ours = pipelines::kOurs.front();
   std::string distances = "data/frechet-distances";
   std::string out = "data/error-matched";
   double eps = 0.0;
@@ -48,8 +52,14 @@ struct Options {
 
 void usage() {
   std::fprintf(stderr,
-               "usage: ssk_match --in DIR --eps E [--distances DIR] [--out DIR] [--tol REL] "
-               "[--rates N] [--limit N] [--shard I --shards N] [--skip-existing] [--validate]\n");
+               "usage: ssk_match --in DIR --eps E [--ours NAME] [--distances DIR] [--out DIR] "
+               "[--tol REL] [--rates N] [--limit N] [--shard I --shards N] [--skip-existing] "
+               "[--validate]\n"
+               "  ours:");
+  for (const std::string& ours : pipelines::kOurs) {
+    std::fprintf(stderr, " %s", ours.c_str());
+  }
+  std::fprintf(stderr, "\n");
   std::exit(2);
 }
 
@@ -62,6 +72,8 @@ Options parse_args(int argc, char** argv) {
       opt.in = argv[++i];
     } else if (arg == "--eps" && has_value) {
       opt.eps = std::atof(argv[++i]);
+    } else if (arg == "--ours" && has_value) {
+      opt.ours = argv[++i];
     } else if (arg == "--distances" && has_value) {
       opt.distances = argv[++i];
     } else if (arg == "--out" && has_value) {
@@ -84,7 +96,9 @@ Options parse_args(int argc, char** argv) {
       usage();
     }
   }
-  if (opt.in.empty() || opt.eps <= 0.0) {
+  if (opt.in.empty() || opt.eps <= 0.0 ||
+      std::find(pipelines::kOurs.begin(), pipelines::kOurs.end(), opt.ours) ==
+          pipelines::kOurs.end()) {
     usage();
   }
   return opt;
@@ -100,7 +114,7 @@ int main(int argc, char** argv) {
 
   std::ostringstream eps_dir;
   eps_dir << "eps" << opt.eps;
-  const fs::path root = fs::path(opt.out) / eps_dir.str();
+  const fs::path root = fs::path(opt.out) / opt.ours / eps_dir.str();
   const frechet::Frechet<2> computer;
   const auto started = std::chrono::steady_clock::now();
   std::size_t matched = 0, points = 0, over = 0, skipped = 0;
@@ -126,8 +140,8 @@ int main(int argc, char** argv) {
           continue;
         }
         const pipelines::Match& match = matches.emplace_back(pipelines::match(
-            computer, curve, json::parse_file(from.string()), opt.eps, opt.relative_tol,
-            opt.validate));
+            computer, opt.ours, curve, json::parse_file(from.string()), opt.eps,
+            opt.relative_tol, opt.validate));
         pipelines::write_document(root / algorithm / dataset / rate / name,
                        pipelines::match_to_json(input, dataset, source, opt.eps, match));
 
@@ -139,14 +153,16 @@ int main(int argc, char** argv) {
       }
     }
     pipelines::write_document(
-        summary, pipelines::summary_to_json(input, dataset, source, opt.eps, matches));
+        summary,
+        pipelines::summary_to_json(input, dataset, source, opt.ours, opt.eps, matches));
     matched += matches.size();
   }
 
   const double seconds =
       std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
-  std::printf("%s eps=%g: %zu trajectories -> %zu matches over %zu points in %.1f s\n",
-              dataset.c_str(), opt.eps, files.size() - skipped, matched, points, seconds);
+  std::printf("%s %s eps=%g: %zu trajectories -> %zu matches over %zu points in %.1f s\n",
+              opt.ours.c_str(), dataset.c_str(), opt.eps, files.size() - skipped, matched, points,
+              seconds);
   if (over > 0) {
     std::printf("  %zu over (1+eps)*delta -- a broken guarantee, look at these\n", over);
   }
@@ -162,7 +178,7 @@ int main(int argc, char** argv) {
                   validation[i].checked);
     }
   }
-  std::printf("  out: %s/%s/{<algorithm>,summary}/%s/\n", opt.out.c_str(), eps_dir.str().c_str(),
-              dataset.c_str());
+  std::printf("  out: %s/%s/%s/{<algorithm>,summary}/%s/\n", opt.out.c_str(), opt.ours.c_str(),
+              eps_dir.str().c_str(), dataset.c_str());
   return 0;
 }

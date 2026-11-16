@@ -8,6 +8,10 @@
 // Ours is measured in the same pass, with the computer and tolerance ssk_frechet used on the
 // baselines: the protocol reports measured error on both sides, and measuring here saves
 // reading every result back.
+//
+// Ours has more than one implementation. Each is run by the name it gives itself, and its
+// results are kept apart from the others', so two implementations can be compared on the same
+// baseline operating points.
 #pragma once
 
 #include <optional>
@@ -22,7 +26,11 @@
 
 namespace ssk::pipelines {
 
+// The first is the default.
+inline const std::vector<std::string> kOurs{"convex-shadow", "convex-shadow-far-points"};
+
 struct Match {
+  std::string ours;      // which implementation, one of kOurs
   json::Value baseline;  // its frechet-distances document
   double delta = 0.0;
   simplify::Curve<2> simplified;
@@ -31,8 +39,9 @@ struct Match {
   std::optional<validate::Stats> validation;  // set when the run was validated
 };
 
-[[nodiscard]] Match match(const frechet::Frechet<2>& computer, const simplify::Curve<2>& input,
-                          json::Value baseline, double eps, double relative_tol, bool validate);
+[[nodiscard]] Match match(const frechet::Frechet<2>& computer, const std::string& ours,
+                          const simplify::Curve<2>& input, json::Value baseline, double eps,
+                          double relative_tol, bool validate);
 
 // {"checked", "failed", "checks": {<name>: {"checked", "failed"}}}
 [[nodiscard]] json::Value validation_to_json(const validate::Stats& stats);
@@ -47,7 +56,7 @@ struct Match {
 // Every match of one trajectory as one small document, so scripts/comparison_stats.py opens
 // one file per trajectory rather than every result. Validation counts are summed over them.
 [[nodiscard]] json::Value summary_to_json(const io::Document& input, const std::string& dataset,
-                                          const std::string& source, double eps,
-                                          const std::vector<Match>& matches);
+                                          const std::string& source, const std::string& ours,
+                                          double eps, const std::vector<Match>& matches);
 
 }  // namespace ssk::pipelines
