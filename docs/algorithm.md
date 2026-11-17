@@ -190,7 +190,8 @@ bit. The current validator flags its grid hull as a region in 519 of them
 shadows.
 
 **A third implementation, `ConvexShadow32`** (`convex-shadow-32`), keeps this construction of
-`F` and replaces `conv(G_v)` by a regular m-gon with `m = O(ε^(−1/2))` sides, the fewest any
+`F`, takes the tangent vertices from where the facing test changes instead of ordering by
+angle, and replaces `conv(G_v)` by a regular m-gon with `m = O(ε^(−1/2))` sides, the fewest any
 convex polygon can have between the same two circles. Why, and what it measures, is in
 [convex-shadow-32.md](convex-shadow-32.md).
 

@@ -122,8 +122,8 @@ costs less.
 - **Both guarantees**, `d_F ≤ (1+ε)δ` and `|σ| ≤ 2κ − 2`, by the same proofs with `P_v` for
   `conv(G_v)`.
 - **Everything else in the code.** `convex_shadow_32.cpp` is `convex_shadow.cpp` with the
-  region replaced; `behind`, the restart rule, the emitted points and the 16-ulp margin are
-  the same.
+  region replaced; the restart rule, the emitted points and the 16-ulp margin are the same,
+  and `behind` cuts by the same lines. It finds the two tangent vertices more simply (§6).
 
 ## 6. In the code
 
@@ -134,6 +134,24 @@ test near the error bound errs inward and `cos` and `sin` round.
 
 `--validate` checks it with `region_convex`, `region_covers_ball` and `region_inside_disk`, the
 checks `conv(G_v)` gets too; `grid_hull` does not apply and is not counted.
+
+**The tangents come from the facing test.** `faces` is the sign of `cross(b − a, p − a)`, the
+dot product of `p − a` with the edge's outward normal, widened by the same 1e-9 tolerance as in
+`convex_shadow.cpp`. The tangents from `p` touch the shadow where a facing edge meets one facing
+away, so the one pass that cuts by the facing edges also finds them: the vertex where facing
+starts is the left tangent's, the vertex where it stops is the right one's. `convex_shadow.cpp`
+orders the vertices by angle around `p` instead, split at the direction of the shadow's centre
+([algorithm.md](algorithm.md) §4, *Finding the tangents near a corner*). Here no centre and no
+ordering are needed. From a `p` an ulp off a corner, both edges at that corner are within the
+tolerance and face `p`, so the tangents go to their far ends and never along the noise
+direction from `p` to the corner. When every edge faces `p`, the shadow is in line with it,
+there is no vertex where facing changes, and the cuts by its edges leave no more than the
+shadow, which is in `F`.
+
+Checked against the angular version (2026-11-17) on the first 150 Mopsi and 40 GeoLife
+trajectories, ε ∈ {0.5, 0.3, 0.1}, δ at 0.0005, 0.003 and 0.02 of each trajectory's extent,
+validated: 1 701 runs, equal vertex counts in all, 1 620 identical to the bit and the rest
+within 6e-9 δ, 0 over the bound by the exact decision, 0 failures in 155 163 318 checks.
 
 ## 7. Measured
 
