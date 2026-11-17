@@ -28,7 +28,7 @@ namespace ssk::pipelines {
 
 // The first is the default.
 inline const std::vector<std::string> kOurs{"convex-shadow", "convex-shadow-far-points",
-                                            "convex-shadow-32"};
+                                            "convex-shadow-32", "convex-shadow-32-sidenorms"};
 
 struct Match {
   std::string ours;      // which implementation, one of kOurs

@@ -311,9 +311,10 @@ protocol reports measured error on both sides, and measuring here saves reading 
 results back from disk.
 
 **It runs one implementation of ours**, named by `--ours`: `convex-shadow`, the default;
-`convex-shadow-far-points`, its first implementation (§4, *How `behind` builds F*); or
+`convex-shadow-far-points`, its first implementation (§4, *How `behind` builds F*);
 `convex-shadow-32`, the same with a regular m-gon for `conv(G_v)`
-([convex-shadow-32.md](convex-shadow-32.md)). Each is its own run, as each ε is, so they can be
+([convex-shadow-32.md](convex-shadow-32.md)); or `convex-shadow-32-sidenorms`, which keeps each
+of its shadows as m offsets and two rays (§8 there). Each is its own run, as each ε is, so they can be
 compared on the same baseline operating points.
 
 **It writes**, under a root per implementation and ε:
@@ -338,7 +339,7 @@ It exists so that the statistics read one small file per trajectory instead of e
 |---|---|---|
 | `--in DIR` | required | a dataset directory of trajectory documents |
 | `--eps E` | required | ours alone, so each value is its own run, and a result must say which it used |
-| `--ours NAME` | `convex-shadow` | which implementation of ours: `convex-shadow`, `convex-shadow-far-points` or `convex-shadow-32` |
+| `--ours NAME` | `convex-shadow` | which implementation of ours: `convex-shadow`, `convex-shadow-far-points`, `convex-shadow-32` or `convex-shadow-32-sidenorms` |
 | `--distances DIR` | `data/frechet-distances` | the baselines' measurements |
 | `--out DIR` | `data/error-matched` | root of the result tree |
 | `--tol REL` | `1e-9` | Fréchet bisection tolerance, relative to the input's diagonal, as in `ssk_frechet` |

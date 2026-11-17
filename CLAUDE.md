@@ -3,8 +3,9 @@
 Streaming δ-simplification of trajectory streams under the continuous Fréchet distance.
 FYP. Ours is `ConvexShadow` in `src/algo/simplify/`, described in `docs/algorithm.md`.
 Beside it, `ConvexShadowFarPoints` is its first implementation, kept for comparison, and
-`ConvexShadow32` replaces `conv(G_v)` by a regular m-gon (`docs/convex-shadow-32.md`); the rest
-is the baselines they are compared with and the pipelines that run the comparison.
+`ConvexShadow32` replaces `conv(G_v)` by a regular m-gon (`docs/convex-shadow-32.md`), and
+`ConvexShadow32SideNorms` keeps each of its shadows as m offsets and two rays (§8 there); the
+rest is the baselines they are compared with and the pipelines that run the comparison.
 
 ## Style
 

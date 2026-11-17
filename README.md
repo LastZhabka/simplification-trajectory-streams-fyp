@@ -276,8 +276,8 @@ mirrors the first one document for document.
 baseline's measured error. Ours is then no worse than the baseline, and the question is how
 many vertices it needs. It measures ours in the same pass, checks the bound exactly, and with
 `--validate` counts the invariant checks into every result. `--ours` picks the implementation,
-`convex-shadow` by default, `convex-shadow-far-points` or `convex-shadow-32`, and each gets its
-own tree.
+`convex-shadow` by default, `convex-shadow-far-points`, `convex-shadow-32` or
+`convex-shadow-32-sidenorms`, and each gets its own tree.
 
 **`scripts/comparison_stats.py`** turns the summaries into the tables: coverage, each
 baseline's error at a fixed rate, ours against each baseline, Theorem 3 checked, and the

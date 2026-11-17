@@ -390,9 +390,10 @@ It needs the build and step 6's `data/frechet-distances/`; a trajectory with no 
 document is skipped. **`--eps` is required**, and each value is its own run under its own root.
 
 **`--ours` picks the implementation**: `convex-shadow`, the default;
-`convex-shadow-far-points`, its first implementation, kept for comparison; or
+`convex-shadow-far-points`, its first implementation, kept for comparison;
 `convex-shadow-32`, which uses a regular m-gon for `conv(G_v)`
-([convex-shadow-32.md](convex-shadow-32.md)). Each is also its own run, under
+([convex-shadow-32.md](convex-shadow-32.md)); or `convex-shadow-32-sidenorms`, the same with
+each shadow kept as m offsets and two rays (§8 there). Each is also its own run, under
 `data/error-matched/<ours>/`. The commands below set it once at the top as `$ours`; to run
 another, change that line and run them again.
 

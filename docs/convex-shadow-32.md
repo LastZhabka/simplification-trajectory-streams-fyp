@@ -182,3 +182,77 @@ so both guarantees are the same, but the m-gon is the smaller of the two: it has
 `conv(G_v)`'s area at ε = 0.5, 96% at 0.3 and 97% at 0.1. A smaller region empties a shadow a
 little sooner, so a run ends a little earlier. The size bound is a bound on the worst case,
 and neither region comes near it here.
+
+## 8. ConvexShadow32SideNorms: a shadow as m offsets and two rays
+
+`ConvexShadow32SideNorms` (`src/algo/simplify/convex_shadow_32_sidenorms.{hpp,cpp}`,
+`--ours convex-shadow-32-sidenorms`) is the same algorithm on the same m-gon, with the same
+starts, restart rule and emitted points. It keeps each shadow as what bounds it: a candidate is
+`p`, the m offsets, the two rays that cut its shadow and the two tangents aimed from it for the
+next step. No polygon is stored.
+
+**Why m offsets and two rays are enough.** Every region is the m-gon moved to a vertex, so it is
+`nₖ·x ≤ nₖ·v + oₖ` with the same m outward unit normals `nₖ`. `F(S, p)` adds only the two
+tangents from `p`, and every tangent passes through `p`. So every shadow is
+
+```
+S = { x : nₖ·x ≤ cₖ for every k }  ∩  W,      W the wedge at p between two rays, or the plane
+```
+
+**One step**, for a start `p` and the next vertex `v`:
+
+1. `F` keeps offset `k` iff `nₖ·p ≥ cₖ`. If `p` is beyond or on a side, going away from `p` only
+   goes deeper inside it: for `y = p + λ(s − p)`, `λ ≥ 1`, `nₖ·y ≤ nₖ·s ≤ cₖ`. It drops the rest.
+2. Each new offset is the minimum of the kept one and the region's, `nₖ·v + oₖ`.
+3. The previous tangents become the rays, and the corners are built: the region cut by every
+   kept offset stricter than the region's, then by the two rays. Fewer than three corners means
+   the shadow is empty.
+4. If `p` is beyond a side, new tangents are aimed through the corners furthest right and left
+   as seen from `p`. The corners are then dropped. Emission and the validator rebuild them the
+   same way from the m-gon of the vertex the offsets were last taken at.
+
+**Why the rays and the tangents are kept apart.** Both bound the same set, and the first version
+rebuilt a shadow from its tangents. A tangent can run almost along an edge of the shadow, when
+`p` is nearly in line with that edge. Clipping by it again is then ill-conditioned and moved the
+corner there by about 3e-9 δ. In 2 of 51.7 M checks the next shadow had a corner in the lost
+sliver (`shadow_behind`, ε = 0.1). Rebuilt from the rays that cut it, a shadow is the same
+polygon to the bit.
+
+**Two different questions about a side.** Whether `p` is beyond side `k` decides whether `F` keeps
+its offset; it changes once, from inside to beyond, and never back. Whether side `k` is an edge
+of `S` decides the corners; it changes from step to step, because a stricter offset can slide a
+side past its neighbours' corners, and a ray cuts sides away. So the corners are not where
+neighbouring side lines meet, and each step has to compute them. On 46.5 M candidate steps of the
+sample below (ε = 0.5 and 0.1), an m-gon side was gone from the offsets alone in 27% and once
+the rays cut in 59%. Each step makes 2.58 clip passes on average, almost all of them the two
+rays.
+
+**Once outside, `p` stays outside, exactly.** A side `p` is beyond is kept, its offset only
+falls, and `nₖ·p` is the same double at every step. So "is `p` in its shadow" compares `nₖ·p`
+with `cₖ`, against normals that are constants rather than differences of shadow vertices. No
+tolerance, no exact-equality case and no final hull are needed. `ConvexShadow32` needs all three
+because it reads each edge's direction off the polygon.
+
+**What reads the corners** is the tangents and the emitted end point. The tangent vertices
+are ordered on each side of a reference direction, as in `convex_shadow.cpp`; the reference is
+the inward normal of the side `p` is furthest beyond, which the whole shadow is ahead of. The end
+point's `closest` skips an edge a few ulps long. A ray passing within an ulp of a corner leaves
+such an edge, its direction is noise, and believing it put a stationary track's last vertex
+outside its own shadow: in 2 of the runs below, before the skip, the end point moved by the
+inradius.
+
+**Measured** (2026-11-17) on the same 1 701 validated runs as §6:
+
+| | `convex-shadow-32` | `convex-shadow-32-sidenorms` |
+|---|---:|---:|
+| output vertices | 63 355 | 63 355, equal in every run |
+| outputs identical to the bit | | 1 580; the rest within 2.3e-9 δ |
+| over the bound, by the exact decision | 0 | 0 |
+| validation failures | 0 in 155 163 318 | 0 in 155 163 318 |
+| time at ε = 0.5, unvalidated, two runs | 10.7–12.1 s | 6.6–7.6 s (1.6×) |
+| time at ε = 0.1 | 61.5–62.2 s | 34.0–35.1 s (1.8×) |
+| lines of `.cpp` | 336 | 299 |
+
+Storing no polygon changed no output: the same 1 701 runs are identical to the bit with the
+version that kept one, and run in the same time within noise (29.4–31.8 s against 30.5–34.5 s
+at ε = 0.1, three runs each).

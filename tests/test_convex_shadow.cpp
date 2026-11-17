@@ -3,6 +3,7 @@
 #include "frechet/frechet.hpp"
 #include "simplify/convex_shadow.hpp"
 #include "simplify/convex_shadow_32.hpp"
+#include "simplify/convex_shadow_32_sidenorms.hpp"
 #include "simplify/convex_shadow_far_points.hpp"
 #include "test_main.hpp"
 #include "validate/validate.hpp"
@@ -44,14 +45,17 @@ TEST("convex-shadow/both implementations stay within (1 + eps) * delta and agree
   }
 }
 
-TEST("convex-shadow/convex-shadow-32 stays within (1 + eps) * delta") {
+TEST("convex-shadow/both m-gon implementations stay within (1 + eps) * delta and agree on size") {
   const ssk::frechet::Frechet<2> frechet;
   for (const Curve<2>& curve : curves()) {
     for (const double eps : {0.5, 0.1}) {
       for (const double delta : {0.05, 0.4, 2.0}) {
-        const Curve<2> out =
-            ssk::simplify::ConvexShadow32({{"delta", delta}, {"eps", eps}}).simplify(curve);
-        CHECK(frechet.within(curve, out, (1.0 + eps) * delta));
+        const Params params{{"delta", delta}, {"eps", eps}};
+        const Curve<2> polygons = ssk::simplify::ConvexShadow32(params).simplify(curve);
+        const Curve<2> norms = ssk::simplify::ConvexShadow32SideNorms(params).simplify(curve);
+        CHECK(frechet.within(curve, polygons, (1.0 + eps) * delta));
+        CHECK(frechet.within(curve, norms, (1.0 + eps) * delta));
+        CHECK(polygons.size() == norms.size());
       }
     }
   }
@@ -91,6 +95,7 @@ TEST("convex-shadow/each implementation names itself") {
   CHECK(ssk::simplify::ConvexShadow(params).name() == "convex-shadow");
   CHECK(ssk::simplify::ConvexShadowFarPoints(params).name() == "convex-shadow-far-points");
   CHECK(ssk::simplify::ConvexShadow32(params).name() == "convex-shadow-32");
+  CHECK(ssk::simplify::ConvexShadow32SideNorms(params).name() == "convex-shadow-32-sidenorms");
 }
 
 }  // namespace

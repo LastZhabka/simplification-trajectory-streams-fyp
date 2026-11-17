@@ -22,6 +22,7 @@ add_library(ssk
   src/algo/io/trajectory.cpp
   src/algo/simplify/convex_shadow.cpp
   src/algo/simplify/convex_shadow_32.cpp
+  src/algo/simplify/convex_shadow_32_sidenorms.cpp
   src/algo/simplify/convex_shadow_far_points.cpp
   src/algo/simplify/dots.cpp
   src/algo/simplify/squish.cpp
