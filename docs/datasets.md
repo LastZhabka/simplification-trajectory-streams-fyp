@@ -394,17 +394,31 @@ exception, `geolife-013552`, is documented in [pipeline.md](pipeline.md) — and
 largest, which is why the cutoff there is a name and not a length.
 
 **Length decides how many rates a trajectory supports.** A budget of `ceil(N / 2^m)` must
-stay at or above 2 vertices, and at or above 5 for SQUISH, so a short trajectory contributes
-to the shallow rates only. At m = 1…6, the first corpus's range (the default is now 2…6), that is why
-`>= 64` points (all six rates for DPn and DOTS) and `>= 320` (all six for SQUISH) matter:
-90% and 63% of GeoLife qualifies, but only 61% and 26% of `mot-mot17`, and 72% and 20% of
-`ngsim-peachtree`. **175 trajectories across the corpus — 1 or 2 points each — supported no
-rate at all and produced no output**, concentrated in `ngsim-lankershim` (69),
-`ngsim-peachtree` (60) and `mot-mot17` (39).
+stay at or above 2 vertices, 3 for SQUISH-E and 5 for SQUISH, so a short trajectory contributes
+to the shallow rates only. Every rate up to m = 6 needs `N >= 65` for DPn and DOTS and
+`N >= 257` for SQUISH: 90% and 69% of GeoLife qualifies, but only 60% and 32% of `mot-mot17`,
+and 72% and 24% of `ngsim-peachtree`. That holds for the default m = 2…6 and for the first
+corpus's 1…6 alike, since both end at m = 6. The first rate is what differs: m = 2 needs
+`N >= 5`, so **467 trajectories, of 4 points or fewer, produce no output** — 164 in
+`ngsim-lankershim`, 112 in `geolife`, 95 in `ngsim-peachtree`, 81 in `mot-mot17`, 15 in
+`mot-mot20`. At 1…6, where m = 1 needs only `N >= 3`, it was 175, those of 1 or 2 points.
 
-Those two rules predict the size of a full sweep exactly. Summing the qualifying rates per
-trajectory over DPn, SQUISH and DOTS gives **786 642 result documents** (SQUISH-E, added
-since, is not in that count), and every completed
-dataset has matched its prediction to the document: 114 029 for `mopsi`, 99 281 for
-`ngsim-lankershim`, 66 512 for `ngsim-peachtree`, 54 007 for `ngsim-i-80`, 51 244 for
-`ngsim-us-101`, 39 783 for `mot-mot20`, 33 831 for `mot-mot17`, 12 335 for `mot-dancetrack`.
+| Dataset | documents at 2…6 | at 1…6 |
+|---|---:|---:|
+| `geolife` | 346 287 | 420 587 |
+| `mopsi` | 124 734 | 151 850 |
+| `ngsim-lankershim` | 105 932 | 131 898 |
+| `ngsim-peachtree` | 70 579 | 88 139 |
+| `ngsim-i-80` | 60 009 | 72 013 |
+| `ngsim-us-101` | 56 938 | 68 326 |
+| `mot-mot20` | 43 751 | 53 023 |
+| `mot-mot17` | 35 547 | 44 790 |
+| `mot-dancetrack` | 13 684 | 16 452 |
+| **corpus** | **857 461** | **1 047 078** |
+
+Those rules predict the size of a full sweep exactly, and the table is that prediction for all
+four baselines, counted through trajio's readers with the sweep's own rule. The first corpus, at 1…6
+and before SQUISH-E, matched its prediction of **786 642 result documents** dataset by dataset,
+to the document: 114 029 for `mopsi`, 99 281 for `ngsim-lankershim`, 66 512 for
+`ngsim-peachtree`, 54 007 for `ngsim-i-80`, 51 244 for `ngsim-us-101`, 39 783 for `mot-mot20`,
+33 831 for `mot-mot17`, 12 335 for `mot-dancetrack`.
