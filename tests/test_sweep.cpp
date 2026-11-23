@@ -55,22 +55,44 @@ void check_runs(const Sweep& sweep, const Curve<2>& c, const std::string& who) {
 
 TEST("sweep/targets halve until they hit the floor") {
   using Sizes = std::vector<std::size_t>;
-  CHECK(ssk::pipelines::budget_targets(100, 6, 2) == Sizes({50, 25, 13, 7, 4, 2}));
-  CHECK(ssk::pipelines::budget_targets(100, 6, 5) == Sizes({50, 25, 13, 7}));
-  CHECK(ssk::pipelines::budget_targets(100, 3, 2) == Sizes({50, 25, 13}));
-  CHECK_MSG(ssk::pipelines::budget_targets(3, 6, 2) == Sizes({2}),
+  CHECK(ssk::pipelines::budget_targets(100, {1, 6}, 2) == Sizes({50, 25, 13, 7, 4, 2}));
+  CHECK(ssk::pipelines::budget_targets(100, {1, 6}, 5) == Sizes({50, 25, 13, 7}));
+  CHECK(ssk::pipelines::budget_targets(100, {1, 3}, 2) == Sizes({50, 25, 13}));
+  CHECK_MSG(ssk::pipelines::budget_targets(3, {1, 6}, 2) == Sizes({2}),
             "three points still support one rate: the two endpoints");
-  CHECK_MSG(ssk::pipelines::budget_targets(2, 6, 2).empty(),
+  CHECK_MSG(ssk::pipelines::budget_targets(2, {1, 6}, 2).empty(),
             "a curve too short for any rate contributes no runs");
-  CHECK_MSG(ssk::pipelines::budget_targets(9, 6, 5) == Sizes({5}),
+  CHECK_MSG(ssk::pipelines::budget_targets(9, {1, 6}, 5) == Sizes({5}),
             "SQUISH's floor of 5 is reachable from 9 points, but only once");
-  CHECK_MSG(ssk::pipelines::budget_targets(8, 6, 5).empty(),
+  CHECK_MSG(ssk::pipelines::budget_targets(8, {1, 6}, 5).empty(),
             "halving 8 lands on 4, which is below SQUISH's floor");
+}
+
+TEST("sweep/the rates start where asked, numbered by m") {
+  using Sizes = std::vector<std::size_t>;
+  CHECK(ssk::pipelines::budget_targets(1000, {3, 8}, 2) == Sizes({125, 63, 32, 16, 8, 4}));
+  CHECK_MSG(ssk::pipelines::budget_targets(1000, {3, 8}, 5) == Sizes({125, 63, 32, 16, 8}),
+            "SQUISH's floor still ends the sweep early");
+
+  const Sweep sweep = ssk::pipelines::sweep_dpn(wander(1000), ssk::pipelines::Rates{});
+  CHECK(sweep.runs.size() == 6);
+  CHECK(sweep.runs.front().m == 3 && sweep.runs.front().target == 125);
+  CHECK(sweep.runs.back().m == 8 && sweep.runs.back().target == 4);
+}
+
+TEST("sweep/--rates reads FIRST..LAST") {
+  const auto rates = ssk::pipelines::parse_rates("3..8");
+  CHECK(rates.has_value() && rates->first == 3 && rates->last == 8);
+  CHECK(ssk::pipelines::parse_rates("5..5").has_value());
+  CHECK_MSG(!ssk::pipelines::parse_rates("6").has_value(), "a bare number was the old flag");
+  CHECK(!ssk::pipelines::parse_rates("0..4").has_value());
+  CHECK(!ssk::pipelines::parse_rates("5..3").has_value());
+  CHECK(!ssk::pipelines::parse_rates("3..8x").has_value());
 }
 
 TEST("sweep/dpn hits every budget exactly") {
   const Curve<2> c = wander(200);
-  const Sweep sweep = ssk::pipelines::sweep_dpn(c, 6);
+  const Sweep sweep = ssk::pipelines::sweep_dpn(c, {1, 6});
   check_runs(sweep, c, "dpn");
   CHECK(sweep.algorithm == "douglas-peucker-n");
   CHECK(sweep.runs.size() == 6);
@@ -87,7 +109,7 @@ TEST("sweep/dpn hits every budget exactly") {
 TEST("sweep/squish stays within every budget and stops at its floor") {
   const Curve<2> c = wander(200);
   const Context in = uniform_time(c.size());
-  const Sweep sweep = ssk::pipelines::sweep_squish(c, in, 6);
+  const Sweep sweep = ssk::pipelines::sweep_squish(c, in, {1, 6});
   check_runs(sweep, c, "squish");
   CHECK(sweep.algorithm == "squish");
   for (const Run& run : sweep.runs) {
@@ -101,7 +123,7 @@ TEST("sweep/squish-e stays within every budget and stops at its floor") {
   for (const std::size_t n : {7u, 40u, 200u, 1000u}) {
     const Curve<2> c = wander(n);
     const Context in = uniform_time(c.size());
-    const Sweep sweep = ssk::pipelines::sweep_squish_e(c, in, 6);
+    const Sweep sweep = ssk::pipelines::sweep_squish_e(c, in, {1, 6});
     check_runs(sweep, c, "squish-e");
     CHECK(sweep.algorithm == "squish-e");
     for (const Run& run : sweep.runs) {
@@ -117,7 +139,7 @@ TEST("sweep/squish-e stays within every budget and stops at its floor") {
 TEST("sweep/dots searches its threshold to the budget") {
   const Curve<2> c = wander(200);
   const Context in = uniform_time(c.size());
-  const Sweep sweep = ssk::pipelines::sweep_dots(c, in, 6);
+  const Sweep sweep = ssk::pipelines::sweep_dots(c, in, {1, 6});
   check_runs(sweep, c, "dots");
   CHECK(sweep.algorithm == "dots");
   CHECK(sweep.runs.size() == 6);
@@ -140,7 +162,7 @@ TEST("sweep/dots searches its threshold to the budget") {
 TEST("sweep/dots gives up on a budget it cannot reach") {
   const Curve<2> c = wander(400);
   const Context in = uniform_time(c.size());
-  const Sweep sweep = ssk::pipelines::sweep_dots(c, in, 6);
+  const Sweep sweep = ssk::pipelines::sweep_dots(c, in, {1, 6});
 
   int unreachable = 0;
   for (const Run& run : sweep.runs) {
@@ -166,7 +188,7 @@ TEST("sweep/dots gives up on a budget it cannot reach") {
 TEST("sweep/dots reaches the same budgets as an independent search") {
   const Curve<2> c = wander(150);
   const Context in = uniform_time(c.size());
-  const Sweep sweep = ssk::pipelines::sweep_dots(c, in, 4);
+  const Sweep sweep = ssk::pipelines::sweep_dots(c, in, {1, 4});
 
   for (const Run& run : sweep.runs) {
     // The same budget, found by a plain bisection that shares nothing between rates.
@@ -193,7 +215,7 @@ TEST("sweep/a result document carries its parameters and reads back as a traject
       R"({"dim": 2, "name": "toy/1", "t_unit": "ms", "t": [0,1,2,3,4,5,6,7,8,9],
           "points": [[0,0],[1,4],[2,0],[3,5],[4,0],[5,6],[6,0],[7,3],[8,0],[9,1]]})"));
   const auto c = ssk::simplify::curve_of<2>(doc);
-  const Sweep sweep = ssk::pipelines::sweep_dpn(c, 2);
+  const Sweep sweep = ssk::pipelines::sweep_dpn(c, {1, 2});
   const Run& run = sweep.runs.front();
   const auto written =
       ssk::pipelines::run_to_json(doc, "toy/toy-1.json", sweep.algorithm, run);
@@ -205,7 +227,7 @@ TEST("sweep/a result document carries its parameters and reads back as a traject
   CHECK(read.find("source")->str() == "toy/toy-1.json");
   CHECK(read.find("name")->str() == "toy/1");
   CHECK_MSG(read.find("input_points") == nullptr,
-            "viz reads input_points as the input points themselves, so the count is a stat");
+            "input_points would read as the input points themselves, so the count is a stat");
   CHECK_MSG(read.find("params")->find("count")->num() == 5.0,
             "the hyper-parameter used must travel with the result");
 
@@ -236,7 +258,7 @@ TEST("sweep/a result document without a clock omits t") {
   const auto doc = ssk::io::read_trajectory(ssk::json::parse(
       R"({"dim": 2, "points": [[0,0],[1,4],[2,0],[3,5],[4,0],[5,6],[6,0],[7,3]]})"));
   const auto c = ssk::simplify::curve_of<2>(doc);
-  const Sweep sweep = ssk::pipelines::sweep_dpn(c, 1);
+  const Sweep sweep = ssk::pipelines::sweep_dpn(c, {1, 1});
   const auto read = ssk::json::parse(
       ssk::pipelines::run_to_json(doc, "toy/toy-2.json", sweep.algorithm, sweep.runs.front())
           .dump());
@@ -269,9 +291,9 @@ TEST("sweep/ordered rejects a run whose indices step backwards") {
 TEST("sweep/every run the sweeps produce here is ordered") {
   const Curve<2> c = wander(300);
   const Context in = uniform_time(c.size());
-  for (const Sweep& sweep : {ssk::pipelines::sweep_dpn(c, 6),
-                             ssk::pipelines::sweep_squish(c, in, 6),
-                             ssk::pipelines::sweep_dots(c, in, 6)}) {
+  for (const Sweep& sweep : {ssk::pipelines::sweep_dpn(c, {1, 6}),
+                             ssk::pipelines::sweep_squish(c, in, {1, 6}),
+                             ssk::pipelines::sweep_dots(c, in, {1, 6})}) {
     for (const Run& run : sweep.runs) {
       ::ssk::test::check(ssk::pipelines::ordered(run), sweep.algorithm + ": run not ordered");
     }
@@ -280,15 +302,15 @@ TEST("sweep/every run the sweeps produce here is ordered") {
 
 TEST("sweep/a curve too short to halve produces no runs") {
   const Curve<2> tiny = wander(2);
-  CHECK(ssk::pipelines::sweep_dpn(tiny, 6).runs.empty());
-  CHECK(ssk::pipelines::sweep_squish(tiny, uniform_time(2), 6).runs.empty());
-  CHECK(ssk::pipelines::sweep_dots(tiny, uniform_time(2), 6).runs.empty());
+  CHECK(ssk::pipelines::sweep_dpn(tiny, {1, 6}).runs.empty());
+  CHECK(ssk::pipelines::sweep_squish(tiny, uniform_time(2), {1, 6}).runs.empty());
+  CHECK(ssk::pipelines::sweep_dots(tiny, uniform_time(2), {1, 6}).runs.empty());
 
   // A short curve drops out of the deeper rates rather than being clamped into them, and
   // out of SQUISH entirely below its floor of 5.
   const Curve<2> ten = wander(10);
-  CHECK(ssk::pipelines::sweep_dpn(ten, 6).runs.size() == 3);
-  CHECK(ssk::pipelines::sweep_squish(ten, uniform_time(10), 6).runs.size() == 1);
+  CHECK(ssk::pipelines::sweep_dpn(ten, {1, 6}).runs.size() == 3);
+  CHECK(ssk::pipelines::sweep_squish(ten, uniform_time(10), {1, 6}).runs.size() == 1);
 }
 
 }  // namespace

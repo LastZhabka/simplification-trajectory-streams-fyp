@@ -332,7 +332,7 @@ data/error-matched/<ours>/eps<E>/summary/<dataset>/<name>.json               eve
 ```
 
 Here `<algorithm>` is the baseline matched against. Each result is a trajectory document, so
-`io::read_trajectory` and `viz/plot.py` read it directly. It holds the points (no `t`, since
+`io::read_trajectory` reads it directly. It holds the points (no `t`, since
 ours invents its vertices), `algorithm` (the implementation's name), `mode: "error-matched"`,
 `params {delta, eps}`, `stats {input_size, output_size, compression}`, its own
 `frechet {distance, tolerance, bound, within_bound, computer}`, and under `matched` the
@@ -350,7 +350,7 @@ It exists so that the statistics read one small file per trajectory instead of e
 | `--distances DIR` | `data/frechet-distances` | the baselines' measurements |
 | `--out DIR` | `data/error-matched` | root of the result tree |
 | `--tol REL` | `1e-9` | Fréchet bisection tolerance, relative to the input's diagonal, as in `ssk_frechet` |
-| `--rates N` | 6 | deepest compression rate to look for |
+| `--rates A..B` | `3..8` | the compression rates looked for, `2^A` to `2^B` |
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process every Nth trajectory, starting at I |
 | `--skip-existing` | off | skip a trajectory whose summary exists |
@@ -358,8 +358,8 @@ It exists so that the statistics read one small file per trajectory instead of e
 
 **It checks the guarantee as it goes.** Every run also takes the exact decision
 `Frechet::within(input, ours, (1+ε)·delta)`, with no tolerance, which costs about a ninth of the
-measurement. It is stored as `frechet.bound` and `frechet.within_bound`, the fields
-`viz/plot.py` reports, and the driver prints a count of any run that fails it.
+measurement. It is stored as `frechet.bound` and `frechet.within_bound`, and the driver
+prints a count of any run that fails it.
 
 **It is resumable.** The summary is written last, so a trajectory that has one is finished.
 After an interruption, rerun with `--skip-existing`.
@@ -525,8 +525,7 @@ roughly 4–5 GB per ε. That is an estimate from the sample.
   0.5, there were 0 violations of either half of Theorem 3, the resume path skipped every
   finished trajectory, and both print as shown above. The strict decision at `(1+ε)δ` found 0 violations
   in 2 006 runs: the calibration samples of all nine datasets at ε = 0.5 and 0.3, plus 3
-  trajectories each of `mot-dancetrack`, `mopsi` and `ngsim-us-101` at ε = 0.5. `viz/plot.py`
-  draws a result document and reports the check.
+  trajectories each of `mot-dancetrack`, `mopsi` and `ngsim-us-101` at ε = 0.5.
 - **Not done:** there are no unit tests for `ssk_match` in `tests/`.
 
 ### Validation while it runs

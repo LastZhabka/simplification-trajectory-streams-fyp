@@ -1,5 +1,5 @@
 // Simplify every trajectory in a dataset directory with all four baselines, at a fixed
-// compression rate of 1/2^m for m = 1..rates.
+// compression rate of 1/2^m for each m in --rates, 3..8 unless told otherwise.
 //
 //   ssk_simplify --in data/trajectories/mopsi --out data/simplified-trajectories
 //
@@ -31,7 +31,7 @@ namespace {
 struct Options {
   std::string in;
   std::string out = "data/simplified-trajectories";
-  int rates = 6;
+  pipelines::Rates rates;
   int limit = 0;
   int shard = 0;
   int shards = 1;
@@ -39,7 +39,7 @@ struct Options {
 };
 
 void usage() {
-  std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates N] [--limit N] "
+  std::fprintf(stderr, "usage: ssk_simplify --in DIR [--out DIR] [--rates A..B] [--limit N] "
                        "[--shard I --shards N] [--no-dots]\n");
   std::exit(2);
 }
@@ -54,7 +54,11 @@ Options parse_args(int argc, char** argv) {
     } else if (arg == "--out" && has_value) {
       opt.out = argv[++i];
     } else if (arg == "--rates" && has_value) {
-      opt.rates = std::atoi(argv[++i]);
+      const auto rates = pipelines::parse_rates(argv[++i]);
+      if (!rates) {
+        usage();
+      }
+      opt.rates = *rates;
     } else if (arg == "--limit" && has_value) {
       opt.limit = std::atoi(argv[++i]);
     } else if (arg == "--shard" && has_value) {

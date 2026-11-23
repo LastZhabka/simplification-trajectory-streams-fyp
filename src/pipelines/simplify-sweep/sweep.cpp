@@ -24,9 +24,9 @@ json::Array times_at(const std::vector<double>& t, const std::vector<std::size_t
 
 }  // namespace
 
-std::vector<std::size_t> budget_targets(std::size_t n, int max_m, std::size_t floor) {
+std::vector<std::size_t> budget_targets(std::size_t n, Rates rates, std::size_t floor) {
   std::vector<std::size_t> out;
-  for (int m = 1; m <= max_m; ++m) {
+  for (int m = rates.first; m <= rates.last; ++m) {
     const auto target = static_cast<std::size_t>(
         std::ceil(static_cast<double>(n) / std::pow(2.0, m)));
     if (target < floor || target >= n) {
@@ -37,10 +37,10 @@ std::vector<std::size_t> budget_targets(std::size_t n, int max_m, std::size_t fl
   return out;
 }
 
-Sweep sweep_dpn(const Curve<2>& curve, int max_m) {
+Sweep sweep_dpn(const Curve<2>& curve, Rates rates) {
   Sweep sweep{"douglas-peucker-n", {}};
-  int m = 0;
-  for (const std::size_t target : budget_targets(curve.size(), max_m, 2)) {
+  int m = rates.first - 1;
+  for (const std::size_t target : budget_targets(curve.size(), rates, 2)) {
     ++m;
     const auto count = static_cast<double>(target);
     sweep.runs.push_back({m,
@@ -52,10 +52,10 @@ Sweep sweep_dpn(const Curve<2>& curve, int max_m) {
   return sweep;
 }
 
-Sweep sweep_squish(const Curve<2>& curve, const Context& in, int max_m) {
+Sweep sweep_squish(const Curve<2>& curve, const Context& in, Rates rates) {
   Sweep sweep{"squish", {}};
-  int m = 0;
-  for (const std::size_t target : budget_targets(curve.size(), max_m, 5)) {
+  int m = rates.first - 1;
+  for (const std::size_t target : budget_targets(curve.size(), rates, 5)) {
     ++m;
     const auto size = static_cast<double>(target);
     sweep.runs.push_back(
@@ -68,10 +68,10 @@ Sweep sweep_squish(const Curve<2>& curve, const Context& in, int max_m) {
   return sweep;
 }
 
-Sweep sweep_squish_e(const Curve<2>& curve, const Context& in, int max_m) {
+Sweep sweep_squish_e(const Curve<2>& curve, const Context& in, Rates rates) {
   Sweep sweep{"squish-e", {}};
-  int m = 0;
-  for (const std::size_t target : budget_targets(curve.size(), max_m, 3)) {
+  int m = rates.first - 1;
+  for (const std::size_t target : budget_targets(curve.size(), rates, 3)) {
     ++m;
     const double ratio = std::pow(2.0, m);
     sweep.runs.push_back(
@@ -98,7 +98,7 @@ Sweep sweep_squish_e(const Curve<2>& curve, const Context& in, int max_m) {
 // already seen. kStable stops that; without it the search ran the bracket down to kTight,
 // which is meaningless precision for an integer-valued step function and cost hours on the
 // longest trajectories.
-Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m) {
+Sweep sweep_dots(const Curve<2>& curve, const Context& in, Rates rates) {
   constexpr double kFirstHi = 1e4;
   constexpr double kGrow = 1e6;      // widen the upper bound until it collapses the curve
   constexpr double kTight = 1e-6;    // bracket width in log space at which to give up
@@ -120,8 +120,8 @@ Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m) {
   };
 
   double lo = std::log(1e-22);
-  int m = 0;
-  for (const std::size_t target : budget_targets(curve.size(), max_m, 2)) {
+  int m = rates.first - 1;
+  for (const std::size_t target : budget_targets(curve.size(), rates, 2)) {
     ++m;
     runs = 0;
 

@@ -1,5 +1,5 @@
 add_library(ssk_sweep sweep.cpp)
-target_link_libraries(ssk_sweep PUBLIC ssk)
+target_link_libraries(ssk_sweep PUBLIC ssk ssk_corpus)
 target_include_directories(ssk_sweep PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(ssk_simplify simplify_sweep.cpp)

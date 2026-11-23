@@ -31,8 +31,6 @@ data/trajectories/*
 data/simplified-trajectories/
 data/frechet-distances/
 data/error-matched/
-data/synthetic/
-data/renders/
 
 # --- python ---
 __pycache__/

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -10,6 +11,16 @@ namespace ssk::pipelines {
 
 inline const std::vector<std::string> kBaselines{"douglas-peucker-n", "squish", "squish-e",
                                                  "dots"};
+
+// Compression rates 2^first to 2^last: at each m in between, a trajectory of N points is asked
+// for ceil(N / 2^m) vertices, and its documents go under m<m>/.
+struct Rates {
+  int first = 3;
+  int last = 8;
+};
+
+// `FIRST..LAST`, as --rates takes it; nothing unless 1 <= FIRST <= LAST.
+std::optional<Rates> parse_rates(const std::string& text);
 
 std::string dataset_of(const std::string& dir);
 

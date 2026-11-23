@@ -102,6 +102,5 @@ used:
 
 ## Tools
 
-Python `matplotlib` and `numpy` for `src/viz/` only — pinned in `requirements.txt`. Nothing
-under `src/trajio/` or `src/algo/` depends on anything outside the standard library, which is
-what keeps ingestion portable and the C++ build offline.
+None. Nothing under `src/` or `scripts/` depends on anything outside the standard library,
+which is what keeps ingestion portable and the C++ build offline.

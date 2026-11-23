@@ -34,22 +34,7 @@ every loop below processes those 40 trajectories twice.
 
 A C++20 compiler and CMake 3.20+. Everything under `src/algo` and `src/pipelines` is standard
 library only, so there is nothing to fetch and the build works offline. Python 3.10+ is needed
-for ingestion and plotting.
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-```
-
-```sh
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-```
-
-`requirements.txt` is matplotlib and numpy, and they are needed **only** by `src/viz/`.
-`trajio` deliberately uses nothing outside the standard library.
+for ingestion and the statistics, and it too is standard library only: nothing to install.
 
 ## 2. Build and test
 
@@ -90,8 +75,8 @@ About **1.96 GB**, and the NGSIM download alone takes ~40 minutes. Full detail o
 dataset contains is in [datasets.md](datasets.md).
 
 `curl` will not create the directory it writes into, and only `data/downloads/` itself is in
-the repository, so make the four first. MOT is fetched with `gdown`, which is not in
-`requirements.txt` because nothing in the project imports it — install it for this step alone:
+the repository, so make the four first. MOT is fetched with `gdown`, which nothing in the
+project imports — install it for this step alone:
 
 ```powershell
 mkdir data\downloads\geolife, data\downloads\mopsi, data\downloads\ngsim, data\downloads\mot
@@ -206,8 +191,8 @@ change leaves the old files behind. Empty the directory first if the format has 
 ## 5. Simplify
 
 Every baseline — DPn, SQUISH, SQUISH-E and DOTS — on every trajectory, at `ceil(N / 2^m)`
-vertices for m = 1…6. The three without SQUISH-E produced **786 642 documents, about 9 GB**;
-with it, expect roughly a third more. The eight smaller datasets first:
+vertices for m = 3…8 (`--rates A..B` picks others). At m = 1…6, the three without SQUISH-E
+produced **786 642 documents, about 9 GB**. The eight smaller datasets first:
 
 ```powershell
 foreach ($ds in Get-ChildItem data\trajectories -Directory -Exclude geolife) {
@@ -509,12 +494,12 @@ the trajectory each shard was on. The shard count may change between runs.
   baselines in its row.
 
 ```powershell
-(Get-ChildItem data\error-matched\convex-shadow\eps0.5\summary\mot-dancetrack).Count
+(Get-ChildItem data\error-matched\greedy-stabbing-shared\eps0.5\summary\mot-dancetrack).Count
 Select-String -Path data\error-matched\*-shard*.log -Pattern "over \(1\+eps\)"
 ```
 
 ```sh
-ls data/error-matched/convex-shadow/eps0.5/summary/mot-dancetrack | wc -l
+ls data/error-matched/greedy-stabbing-shared/eps0.5/summary/mot-dancetrack | wc -l
 grep "over (1+eps)" data/error-matched/*.log
 ```
 
@@ -581,103 +566,6 @@ The `mot-dancetrack` results, bucketed by size ratio, are in
 
 ---
 
-## Visualising
-
-`src/viz/plot.py` renders any document in the project's format — an input trajectory, or a
-simplification — with a statistics panel beside it. It uses matplotlib's `Agg` backend, so it
-writes files and needs no display, which also means it works over SSH and in a container.
-
-```powershell
-python src\viz\plot.py data\trajectories\mopsi\mopsi-000003.json -o data\renders\input.png
-python src\viz\plot.py data\simplified-trajectories\dots\mopsi\m3\mopsi-000003.json -o data\renders\simplified.png
-```
-
-```sh
-python src/viz/plot.py data/trajectories/mopsi/mopsi-000003.json -o data/renders/input.png
-python src/viz/plot.py data/simplified-trajectories/dots/mopsi/m3/mopsi-000003.json \
-                       -o data/renders/simplified.png
-```
-
-Because a simplification is a trajectory document in its own right, it draws directly with no
-conversion step. 3D documents render as a 3D line plot plus the `xy`, `xz` and `yz`
-projections, since one 3D view hides most of what a simplification did.
-
-Ours' results from step 7 are trajectory documents too. They carry their own `frechet` block
-with `bound` and `within_bound`, so the panel shows whether the guarantee held:
-
-```powershell
-python src\viz\plot.py data\error-matched\convex-shadow\eps0.5\dots\mot-dancetrack\m3\mot-000001.json -o data\renders\ours.png
-```
-
-```sh
-python src/viz/plot.py data/error-matched/convex-shadow/eps0.5/dots/mot-dancetrack/m3/mot-000001.json \
-                       -o data/renders/ours.png
-```
-
-### Input and simplification on the same axes
-
-The result documents deliberately do **not** carry a copy of the input — that would repeat the
-whole trajectory in each of the ~14 documents per trajectory. `plot.py` draws the input
-underneath when the document has an `input_points` array, so build a throwaway document that
-has one. This also fills in the statistics panel's Fréchet line. Python, so identical on both
-platforms:
-
-```python
-import json, pathlib
-
-name, algo, rate, ds = "mopsi-000003.json", "dots", "m3", "mopsi"
-
-src = json.loads(pathlib.Path(f"data/trajectories/{ds}/{name}").read_text())
-res = json.loads(pathlib.Path(f"data/simplified-trajectories/{algo}/{ds}/{rate}/{name}").read_text())
-fr = json.loads(pathlib.Path(f"data/frechet-distances/{algo}/{ds}/{rate}/{name}").read_text())
-
-res["input_points"] = src["points"]
-res["frechet"] = {"distance": fr["frechet"]["distance"],
-                  "bound": fr["frechet"]["distance"],
-                  "within_bound": True,
-                  "computer": fr["frechet"]["computer"]}
-pathlib.Path("data/renders").mkdir(parents=True, exist_ok=True)
-pathlib.Path("data/renders/overlay.json").write_text(json.dumps(res))
-```
-
-```powershell
-python src\viz\plot.py data\renders\overlay.json -o data\renders\overlay.png
-```
-
-```sh
-python src/viz/plot.py data/renders/overlay.json -o data/renders/overlay.png
-```
-
-For one of ours, load it from `data/error-matched/<ours>/eps<E>/<algorithm>/...` as `res`, and drop
-the `fr` and `res["frechet"]` lines: it already has its `frechet`, and only `input_points` is
-missing.
-
-The input appears in grey behind the simplification in red, with its kept vertices marked, and
-the panel reports the algorithm, the compression achieved and the measured Fréchet distance.
-That picture is the quickest way to see whether a number is believable — a distance that looks
-wrong usually looks wrong on the plot too.
-
-### Synthetic curves
-
-For working on an algorithm without touching a dataset:
-
-```powershell
-python src\viz\generate.py spiral2d      -n 600 -o data\synthetic\spiral2d.json
-python src\viz\generate.py shrink-spiral -n 75  -o data\synthetic\shrink_spiral3d.json
-```
-
-```sh
-python src/viz/generate.py spiral2d      -n 600 -o data/synthetic/spiral2d.json
-python src/viz/generate.py shrink-spiral -n 75  -o data/synthetic/shrink_spiral3d.json
-```
-
-`spiral2d`, `zigzag2d`, `walk2d`, `u-shape`, `o-shape` in 2D and `shrink-spiral` in 3D.
-`u-shape` and `o-shape` are the two that stress a simplifier — near-parallel legs whose
-tolerance balls overlap, and a closed loop with both endpoints pinned. They take the same
-pipelines as a real dataset: point `--in` at `data/synthetic`.
-
----
-
 ## Portability
 
 **No source file is platform-specific.** The C++ uses `std::filesystem` throughout with no
@@ -696,7 +584,6 @@ What differs is only ever the shell:
 
 | | Windows (PowerShell) | Linux / macOS |
 |---|---|---|
-| activate the venv | `.\.venv\Scripts\Activate.ps1` | `source .venv/bin/activate` |
 | set `PYTHONPATH` | `$env:PYTHONPATH = "$PWD\src"` | `export PYTHONPATH=$PWD/src` |
 | configure CMake | add `-G "MinGW Makefiles"` | no generator flag needed |
 | run a binary | `.\build\...\ssk_simplify.exe` | `./build/.../ssk_simplify` |

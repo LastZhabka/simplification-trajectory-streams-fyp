@@ -4,8 +4,7 @@
                                    "points": [[x, y], ...]}
     <out>/index.json              the dataset, and one entry per file written
 
-This is the format the rest of the project reads: `src/algo/io/trajectory.hpp` on the C++
-side, `src/viz/` on the Python side.
+This is the format the rest of the project reads, through `src/algo/io/trajectory.hpp`.
 
 Coordinates and timestamps are written as the **source text**, placed directly in the JSON
 number slot, so no float round-trip happens between the dataset file and ours. The one

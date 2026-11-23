@@ -7,8 +7,7 @@
 //
 // A Sweep is one algorithm's whole set of rates for one trajectory. Each rate is written as
 // its own document: a trajectory document -- points, and the timestamps that go with them --
-// carrying the result fields on top, so `io::read_trajectory` reads it as a curve and
-// `viz/plot.py` draws it without a rehydration step.
+// carrying the result fields on top, so `io::read_trajectory` reads it as a curve.
 #pragma once
 
 #include <cstddef>
@@ -16,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "corpus.hpp"
 #include "io/json.hpp"
 #include "io/trajectory.hpp"
 #include "simplify/simplifier.hpp"
@@ -38,18 +38,18 @@ struct Sweep {
   std::vector<Run> runs;
 };
 
-// ceil(N / 2^m) for m = 1..max_m, stopping at the first budget below `floor` -- a budget
+// ceil(N / 2^m) for each m in `rates`, stopping at the first budget below `floor` -- a budget
 // under 2 cannot be met when both endpoints are always kept, and SQUISH needs more than 4.
-std::vector<std::size_t> budget_targets(std::size_t n, int max_m, std::size_t floor);
+std::vector<std::size_t> budget_targets(std::size_t n, Rates rates, std::size_t floor);
 
-Sweep sweep_dpn(const Curve<2>& curve, int max_m);
-Sweep sweep_squish(const Curve<2>& curve, const Context& in, int max_m);
+Sweep sweep_dpn(const Curve<2>& curve, Rates rates);
+Sweep sweep_squish(const Curve<2>& curve, const Context& in, Rates rates);
 
 // SQUISH-E(lambda = 2^m, mu = 0). Its queue holds 4 points plus one per lambda inputs and is
 // reduced whenever it fills, so it keeps at most max(3, (N - 1) / 2^m) points: within the
 // target from a target of 3 up, and usually a point or two under it.
-Sweep sweep_squish_e(const Curve<2>& curve, const Context& in, int max_m);
-Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m);
+Sweep sweep_squish_e(const Curve<2>& curve, const Context& in, Rates rates);
+Sweep sweep_dots(const Curve<2>& curve, const Context& in, Rates rates);
 
 // Whether the run's indices are strictly increasing, which is what makes its points a
 // subsequence of the input rather than a reordering of one.
@@ -63,7 +63,7 @@ Sweep sweep_dots(const Curve<2>& curve, const Context& in, int max_m);
 
 // One run as a result document: the kept points and their timestamps, plus `algorithm`,
 // `mode`, `params` and `stats`. The input size goes in `stats.input_size`, not a top-level
-// `input_points` -- viz reads that key as the input *points*, to draw under the result.
+// `input_points`, a name that reads as the input's points rather than their count.
 json::Value run_to_json(const io::Document& doc, const std::string& source,
                         const std::string& algorithm, const Run& run);
 

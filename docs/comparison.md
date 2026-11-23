@@ -57,7 +57,7 @@ one of the two and measures the other.
 ## The protocol
 
 **1. K-simplification.** Run each baseline at a fixed budget of `N / 2^M` vertices, for
-M = 1…6. DPn and SQUISH take a budget natively and hit it exactly; SQUISH-E takes the rate
+M = 3…8 (M = 1…6 until UPDATES 68). DPn and SQUISH take a budget natively and hit it exactly; SQUISH-E takes the rate
 itself and lands a point or two under the budget; DOTS has no budget knob and
 needs a search on its threshold (99.3% of budgets exact, worst miss 0.4% under). The mechanics
 are in *How each baseline is driven to the budget* below.
@@ -196,9 +196,9 @@ make that affordable:
 
 - *The count is monotone in the threshold*, so the search is a bisection rather than a scan —
   verified over a 561-step log grid per trajectory, 0 non-monotone steps.
-- *All six rates are solved as one problem, not six.* Smaller budgets need larger thresholds,
-  so the rates are solved from M = 1 upward and each solved threshold becomes the lower bound
-  of the next search. One traversal of the threshold range instead of six.
+- *All the rates are solved as one problem, not six.* Smaller budgets need larger thresholds,
+  so the rates are solved from the first M upward and each solved threshold becomes the lower
+  bound of the next search. One traversal of the threshold range instead of six.
 - *Every evaluation is memoised and the bracket is seeded by interpolation* — the counts
   already seen bound the next target and give a secant step, since count falls roughly
   linearly in log(threshold).

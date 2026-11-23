@@ -32,7 +32,7 @@ on disk is always a whole one. What the experiment is *for* is
 |---|---|---|
 | `--in DIR` | required | a dataset directory of trajectory documents; `index.json` is skipped |
 | `--out DIR` | `data/simplified-trajectories` | root of the result tree |
-| `--rates N` | 6 | deepest compression rate, `1/2^N` |
+| `--rates A..B` | `3..8` | the compression rates, `2^A` to `2^B`: budgets `ceil(N / 2^m)` for m = A…B |
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process only every Nth trajectory, starting at I |
 | `--no-dots` | off | run DPn, SQUISH and SQUISH-E only — see *The one trajectory DOTS does not cover* |
@@ -95,7 +95,7 @@ the trade being made.
 ## What a corpus run costs
 
 Measured on this machine (MinGW g++ 15.1 `-O2`, 8 cores), one pass over all nine datasets at
-m = 1…6:
+m = 1…6, the range before the default became 3…8:
 
 | Dataset | Trajectories | Points | Documents | Wall time |
 |---|---:|---:|---:|---:|
@@ -198,7 +198,7 @@ and elapsed time — rather than trusting the arithmetic above.
 | `--simplified DIR` | `data/simplified-trajectories` | the tree to measure |
 | `--out DIR` | `data/frechet-distances` | root of the measurement tree |
 | `--tol REL` | `1e-9` | bisection tolerance, **relative** to the input's bounding-box diagonal |
-| `--rates N` | 6 | deepest compression rate to look for |
+| `--rates A..B` | `3..8` | the compression rates looked for, `2^A` to `2^B` |
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process only every Nth trajectory, starting at I |
 | `--skip-existing` | off | do not recompute a measurement already on disk, making an interrupted run resumable |
@@ -253,17 +253,7 @@ they are.
 ## Checking a run
 
 Result documents are trajectory documents, so they can be read back with
-`io::read_trajectory` and drawn with `viz/plot.py` directly:
-
-```sh
-python src/viz/plot.py \
-  data/simplified-trajectories/dots/mopsi/m3/mopsi-000003.json -o data/renders/check.png
-```
-
-```powershell
-python src\viz\plot.py `
-  data\simplified-trajectories\dots\mopsi\m3\mopsi-000003.json -o data\renders\check.png
-```
+`io::read_trajectory` directly.
 
 Beyond that, a result is verifiable against its input, and `source` names it: the points must
 be a subsequence of the input matched on point *and* timestamp — matching on coordinates

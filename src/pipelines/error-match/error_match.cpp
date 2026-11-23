@@ -42,7 +42,7 @@ struct Options {
   std::string out = "data/error-matched";
   double eps = 0.0;
   double relative_tol = 1e-9;
-  int rates = 6;
+  pipelines::Rates rates;
   int limit = 0;
   int shard = 0;
   int shards = 1;
@@ -53,7 +53,7 @@ struct Options {
 void usage() {
   std::fprintf(stderr,
                "usage: ssk_match --in DIR --eps E [--ours NAME] [--distances DIR] [--out DIR] "
-               "[--tol REL] [--rates N] [--limit N] [--shard I --shards N] [--skip-existing] "
+               "[--tol REL] [--rates A..B] [--limit N] [--shard I --shards N] [--skip-existing] "
                "[--validate]\n"
                "  ours:");
   for (const std::string& ours : pipelines::kOurs) {
@@ -81,7 +81,11 @@ Options parse_args(int argc, char** argv) {
     } else if (arg == "--tol" && has_value) {
       opt.relative_tol = std::atof(argv[++i]);
     } else if (arg == "--rates" && has_value) {
-      opt.rates = std::atoi(argv[++i]);
+      const auto rates = pipelines::parse_rates(argv[++i]);
+      if (!rates) {
+        usage();
+      }
+      opt.rates = *rates;
     } else if (arg == "--limit" && has_value) {
       opt.limit = std::atoi(argv[++i]);
     } else if (arg == "--shard" && has_value) {
@@ -133,7 +137,7 @@ int main(int argc, char** argv) {
 
     std::vector<pipelines::Match> matches;
     for (const std::string& algorithm : pipelines::kBaselines) {
-      for (int m = 1; m <= opt.rates; ++m) {
+      for (int m = opt.rates.first; m <= opt.rates.last; ++m) {
         const std::string rate = "m" + std::to_string(m);
         const fs::path from = fs::path(opt.distances) / algorithm / dataset / rate / name;
         if (!fs::exists(from)) {

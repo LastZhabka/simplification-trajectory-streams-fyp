@@ -395,11 +395,12 @@ largest, which is why the cutoff there is a name and not a length.
 
 **Length decides how many rates a trajectory supports.** A budget of `ceil(N / 2^m)` must
 stay at or above 2 vertices, and at or above 5 for SQUISH, so a short trajectory contributes
-to the shallow rates only. That is why `>= 64` points (all six rates for DPn and DOTS) and
-`>= 320` (all six for SQUISH) matter: 90% and 63% of GeoLife qualifies, but only 61% and 26%
-of `mot-mot17`, and 72% and 20% of `ngsim-peachtree`. **175 trajectories across the corpus —
-1 or 2 points each — support no rate at all and produce no output**, concentrated in
-`ngsim-lankershim` (69), `ngsim-peachtree` (60) and `mot-mot17` (39).
+to the shallow rates only. At m = 1…6, the range before the default became 3…8, that is why
+`>= 64` points (all six rates for DPn and DOTS) and `>= 320` (all six for SQUISH) matter:
+90% and 63% of GeoLife qualifies, but only 61% and 26% of `mot-mot17`, and 72% and 20% of
+`ngsim-peachtree`. **175 trajectories across the corpus — 1 or 2 points each — supported no
+rate at all and produced no output**, concentrated in `ngsim-lankershim` (69),
+`ngsim-peachtree` (60) and `mot-mot17` (39).
 
 Those two rules predict the size of a full sweep exactly. Summing the qualifying rates per
 trajectory over DPn, SQUISH and DOTS gives **786 642 result documents** (SQUISH-E, added

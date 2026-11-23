@@ -34,7 +34,7 @@ struct Options {
   std::string simplified = "data/simplified-trajectories";
   std::string out = "data/frechet-distances";
   double relative_tol = 1e-9;
-  int rates = 6;
+  pipelines::Rates rates;
   int limit = 0;
   int shard = 0;
   int shards = 1;
@@ -44,7 +44,7 @@ struct Options {
 void usage() {
   std::fprintf(stderr,
                "usage: ssk_frechet --in DIR [--simplified DIR] [--out DIR] [--tol REL] "
-               "[--rates N] [--limit N] [--shard I --shards N] [--skip-existing]\n");
+               "[--rates A..B] [--limit N] [--shard I --shards N] [--skip-existing]\n");
   std::exit(2);
 }
 
@@ -62,7 +62,11 @@ Options parse_args(int argc, char** argv) {
     } else if (arg == "--tol" && has_value) {
       opt.relative_tol = std::atof(argv[++i]);
     } else if (arg == "--rates" && has_value) {
-      opt.rates = std::atoi(argv[++i]);
+      const auto rates = pipelines::parse_rates(argv[++i]);
+      if (!rates) {
+        usage();
+      }
+      opt.rates = *rates;
     } else if (arg == "--limit" && has_value) {
       opt.limit = std::atoi(argv[++i]);
     } else if (arg == "--shard" && has_value) {
@@ -100,7 +104,7 @@ int main(int argc, char** argv) {
     const std::string name = file.filename().string();
 
     for (const std::string& algorithm : pipelines::kBaselines) {
-      for (int m = 1; m <= opt.rates; ++m) {
+      for (int m = opt.rates.first; m <= opt.rates.last; ++m) {
         const std::string rate = "m" + std::to_string(m);
         const fs::path from = fs::path(opt.simplified) / algorithm / dataset / rate / name;
         if (!fs::exists(from)) {

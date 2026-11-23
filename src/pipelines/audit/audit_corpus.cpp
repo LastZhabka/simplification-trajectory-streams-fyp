@@ -26,12 +26,12 @@ namespace {
 struct Options {
   std::string in;
   std::string results = "data/simplified-trajectories";
-  int rates = 6;
+  pipelines::Rates rates;
   bool paths_only = false;
 };
 
 void usage() {
-  std::fprintf(stderr, "usage: ssk_audit --in DIR [--results DIR] [--rates N] [--paths]\n");
+  std::fprintf(stderr, "usage: ssk_audit --in DIR [--results DIR] [--rates A..B] [--paths]\n");
   std::exit(2);
 }
 
@@ -45,7 +45,11 @@ Options parse_args(int argc, char** argv) {
     } else if (arg == "--results" && has_value) {
       opt.results = argv[++i];
     } else if (arg == "--rates" && has_value) {
-      opt.rates = std::atoi(argv[++i]);
+      const auto rates = pipelines::parse_rates(argv[++i]);
+      if (!rates) {
+        usage();
+      }
+      opt.rates = *rates;
     } else if (arg == "--paths") {
       opt.paths_only = true;
     } else {
@@ -70,7 +74,7 @@ int main(int argc, char** argv) {
     const std::string name = file.filename().string();
 
     for (const std::string& algorithm : pipelines::kBaselines) {
-      for (int m = 1; m <= opt.rates; ++m) {
+      for (int m = opt.rates.first; m <= opt.rates.last; ++m) {
         const fs::path p =
             fs::path(opt.results) / algorithm / dataset / ("m" + std::to_string(m)) / name;
         if (!fs::exists(p)) {

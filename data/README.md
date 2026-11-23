@@ -11,8 +11,6 @@ simplified-trajectories/  every baseline at every compression rate, by ssk_simpl
 frechet-distances/        the measured error of each of those, by ssk_frechet
 error-matched/            ours at each baseline's error, and the summaries, by ssk_match;
                           one tree per implementation of ours
-synthetic/                generated test curves, by src/viz/generate.py
-renders/                  images, by src/viz/plot.py
 ```
 
 The three result trees are produced in that order, each from the one before; the commands and
@@ -23,8 +21,8 @@ the only one with content worth reading before use. Everything else is output.
 
 ## Our format
 
-`trajectories/` and `synthetic/` hold the same thing, and it is the only trajectory format
-in this repository: one JSON document per curve.
+`trajectories/` holds it, and it is the only trajectory format in this repository: one JSON
+document per curve.
 
 ```json
 {
@@ -50,17 +48,16 @@ in this repository: one JSON document per curve.
   straight into the JSON number slot, so no float round-trip happens between the dataset
   file and ours.
 
-Read it with `ssk::io::read_trajectory_file` (C++, `src/algo/io/trajectory.hpp`) or
-`trajectory_io.load` (Python, `src/viz/`).
+Read it with `ssk::io::read_trajectory_file` (C++, `src/algo/io/trajectory.hpp`).
 
 A *result* document — what a simplification run writes — is the same document, its `points`
 now the simplified ones, plus `algorithm`, `mode`, `params`, `stats` and `source`, which names
 the input rather than repeating it. A measured one adds `frechet`, and a validated run of ours
-adds `validation`. `src/viz/plot.py` renders either.
+adds `validation`.
 
 ## Refilling it
 
-From the repository root, with the virtual environment active and `src/` on `PYTHONPATH` —
+From the repository root, with `src/` on `PYTHONPATH` —
 see the setup section of [`../README.md`](../README.md):
 
 ```powershell
@@ -73,10 +70,6 @@ python -m trajio export --source mopsi --root data\downloads\mopsi --dims 2 `
 # MOT has no clock, so the frame rate has to be stated: 20 for DanceTrack, 30 for MOT17/20
 python -m trajio export --source mot --root data\downloads\mot\dataset\DanceTrack `
                         --opt fps=20 --dims 2 --out data\trajectories\mot-dancetrack
-
-# synthetic/ and renders/
-python src\viz\generate.py spiral2d -n 600 -o data\synthetic\spiral2d.json
-python src\viz\plot.py data\synthetic\spiral2d.json -o data\renders\spiral2d.png
 ```
 
 Download commands for `downloads/` are in [`downloads/README.md`](downloads/README.md) and

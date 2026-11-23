@@ -34,7 +34,6 @@ std::unique_ptr<simplify::Simplifier<2>> make_ours(const std::string& ours,
   throw std::runtime_error("error-match: no implementation of ours named '" + ours + "'");
 }
 
-// `bound` and `within_bound` are what viz/plot.py reports.
 json::Value frechet_to_json(const Match& match, double eps) {
   return json::Object{
       {"distance", json::Value(match.measured.distance)},

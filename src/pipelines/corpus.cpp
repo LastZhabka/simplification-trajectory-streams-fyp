@@ -1,11 +1,22 @@
 #include "corpus.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <fstream>
 
 namespace fs = std::filesystem;
 
 namespace ssk::pipelines {
+
+std::optional<Rates> parse_rates(const std::string& text) {
+  Rates rates;
+  char rest = 0;
+  if (std::sscanf(text.c_str(), "%d..%d%c", &rates.first, &rates.last, &rest) != 2 ||
+      rates.first < 1 || rates.first > rates.last) {
+    return std::nullopt;
+  }
+  return rates;
+}
 
 std::string dataset_of(const std::string& dir) {
   // A trailing separator -- which tab completion adds -- makes filename() empty.

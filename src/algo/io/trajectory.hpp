@@ -4,7 +4,7 @@
 //      "t_unit": "unix_ms", "t": [...], "points": [[x, y], ...]}
 //
 // Dimension-agnostic on purpose: this is the one layer every algorithm track shares, and
-// the same document `src/trajio` exports and `src/viz` draws.
+// the same document `src/trajio` exports.
 //
 // `t` is optional -- a curve needs no clock to be simplified under the Frechet distance --
 // but the SED-based algorithms in the literature do, so it is carried when the dataset has

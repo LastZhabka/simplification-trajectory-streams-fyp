@@ -14,8 +14,8 @@ What is here:
   SQUISH, SQUISH-E and DOTS.
 - **The continuous Fréchet distance**, ported from the GIS Cup 2017 winner, to measure all of
   them the same way.
-- **The pipelines** that run the comparison, and the tooling around them: dataset ingestion,
-  one JSON format, and visualisation.
+- **The pipelines** that run the comparison, and the tooling around them: dataset ingestion
+  and one JSON format.
 
 ## Layout
 
@@ -24,18 +24,17 @@ src/
   trajio/       Python   dataset formats  ->  our format          (ingestion)
   algo/         C++      the library `ssk`; reads our format
     io/                  json.{hpp,cpp}, trajectory.{hpp,cpp}
-    simplify/            the Simplifier interface, the four baselines, and ours: convex_shadow,
-                         convex_shadow_far_points (its first implementation) and
-                         convex_shadow_32 (a regular m-gon for conv(G_v))
+    geometry/            plane geometry for ours: convex polygons, cones, clipping, the hull
+    simplify/            the Simplifier interface, the four baselines, and ours: the greedy
+                         stabbers, greedy_stabber.hpp and greedy_stabbing.{hpp,cpp}
     frechet/             the continuous Fréchet distance
-    validate/            checks of our algorithm's invariants, counted as it runs
+    validate/            invariant checks, counted as they run; no stabber is watched yet
   pipelines/    C++      the experiment drivers
     simplify-sweep/      ssk_simplify   every baseline at every compression rate
     frechet-distance/    ssk_frechet    the error of each of those simplifications
     error-match/         ssk_match      ours at each baseline's measured error
     audit/               ssk_audit      checks result documents against their inputs
     corpus.{hpp,cpp}     what the four share: file list, sharding, atomic document write
-  viz/          Python   renders trajectories and results; the compression-rate report
 
 scripts/        comparison_stats.py, the statistics over what ssk_match wrote
 tests/          C++ unit tests, own harness
@@ -43,13 +42,12 @@ data/           downloads, trajectories and every result tree (git-ignored)
 docs/           one document per topic, listed at the end
 
 CMakeLists.txt   the C++ build
-requirements.txt the Python dependencies -- matplotlib and numpy, for src/viz only
 UPDATES.md       what changed, and why (local, git-ignored)
 CLAUDE.md        conventions, for agents working in this repo
 ```
 
-One format between all of it: **trajio writes it, `algo/io` reads it, the pipelines extend it,
-`viz` draws it.**
+One format between all of it: **trajio writes it, `algo/io` reads it, the pipelines extend
+it.**
 
 ### Our format
 
@@ -76,8 +74,7 @@ clock, while Fréchet-bounded and perpendicular-distance simplification do not.
 
 A *result* document is a trajectory document of the simplified points, plus `algorithm`,
 `mode`, `params`, `stats` and `source`. A measured one adds `frechet`, and a validated run of
-ours adds `validation`. It does not repeat the input: `source` names it. `viz/plot.py` renders
-either kind.
+ours adds `validation`. It does not repeat the input: `source` names it.
 
 More on the data directories and how to refill them: [`data/README.md`](data/README.md).
 
@@ -85,31 +82,10 @@ More on the data directories and how to refill them: [`data/README.md`](data/REA
 
 Prerequisites: a C++20 compiler, CMake ≥ 3.20, and Python 3.10 or later.
 
-### 1. Python environment
+### 1. Python
 
-`src/viz` needs matplotlib and numpy; `src/trajio` and `scripts/` need nothing but the
-standard library. Use a virtual environment rather than a system or Anaconda Python —
-matplotlib and NumPy have to be a matched pair, and a stale pair fails to import at all.
-
-```powershell
-# Windows / PowerShell, from the repository root
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-```
-
-```sh
-# Linux / macOS
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-```
-
-`.venv/` is git-ignored. If PowerShell refuses to run the activation script, either
-`Set-ExecutionPolicy -Scope Process RemoteSigned` for that session, or skip activation and
-call `.\.venv\Scripts\python.exe` directly.
-
-`trajio` is imported as a package, so `src/` has to be on the import path:
+`src/trajio` and `scripts/` need nothing but the standard library, so there is nothing to
+install. `trajio` is imported as a package, so `src/` has to be on the import path:
 
 ```powershell
 $env:PYTHONPATH = "$PWD\src"      # PowerShell
@@ -138,22 +114,10 @@ cmake --build build -j
 .\build\tests\ssk_tests.exe
 ```
 
-The generator is the only difference: MinGW needs naming, the default works elsewhere. 86
+The generator is the only difference: MinGW needs naming, the default works elsewhere. 85
 tests, a few seconds.
 
 ### 3. End to end
-
-A picture, needing no dataset:
-
-```powershell
-python src\viz\generate.py spiral2d -n 600 -o data\synthetic\spiral2d.json
-python src\viz\plot.py data\synthetic\spiral2d.json -o data\renders\spiral2d.png
-```
-
-```sh
-python src/viz/generate.py spiral2d -n 600 -o data/synthetic/spiral2d.json
-python src/viz/plot.py data/synthetic/spiral2d.json -o data/renders/spiral2d.png
-```
 
 The whole experiment, from downloads to the comparison tables, is
 [`docs/running.md`](docs/running.md): every step in PowerShell and POSIX form, with what each
@@ -268,7 +232,7 @@ python scripts\comparison_stats.py --matched data\error-matched
 ```
 
 **`ssk_simplify`** runs every baseline on every trajectory at a fixed compression rate of
-`1/2^m` for m = 1…6. DPn and SQUISH take the budget directly, SQUISH-E takes the rate, and
+`1/2^m` for m = 3…8 (`--rates`). DPn and SQUISH take the budget directly, SQUISH-E takes the rate, and
 DOTS has its threshold searched for. Each result is a trajectory document in its own right.
 
 **`ssk_frechet`** measures how far each simplification is from its input, in a tree that
@@ -285,8 +249,6 @@ counts are zero for now: no stabber is watched yet.
 **`scripts/comparison_stats.py`** turns the summaries into the tables: coverage, each
 baseline's error at a fixed rate, ours against each baseline, Theorem 3 checked, and the
 validation counts, with each implementation of ours at each ε as its own run.
-`src/viz/compression.py` draws the distribution of our compression rate for one
-implementation, `--ours`.
 
 The first three take `--shard I --shards N` to split a dataset across processes and
 `--limit N` to stop early; `ssk_frechet` and `ssk_match` take `--skip-existing` to resume. A document is
@@ -295,29 +257,6 @@ written under a temporary name and renamed, so one on disk is always whole.
 The flags and layout are in [`docs/pipeline.md`](docs/pipeline.md). Why a fixed compression
 rate rather than a fixed tolerance, and what the numbers can and cannot claim, is
 [`docs/comparison.md`](docs/comparison.md).
-
-### `src/viz/` — pictures out
-
-```sh
-python src/viz/generate.py spiral2d -n 600 -o data/synthetic/spiral2d.json
-python src/viz/plot.py data/synthetic/spiral2d.json -o data/renders/spiral2d.png
-```
-
-```powershell
-python src\viz\generate.py spiral2d -n 600 -o data\synthetic\spiral2d.json
-python src\viz\plot.py data\synthetic\spiral2d.json -o data\renders\spiral2d.png
-```
-
-`plot.py` renders with matplotlib on the `Agg` backend, so it writes files without needing
-a display. 2D is one panel; 3D is a 3D line plot plus the `xy`, `xz` and `yz` projections,
-since a single 3D view hides most of what a simplification did. The statistics panel lists
-the document's `params` and `stats`, and its `frechet` block when it has one, so a bare
-trajectory renders fine.
-
-`generate.py` builds the synthetic test curves: `spiral2d`, `zigzag2d`, `walk2d`,
-`u-shape`, `o-shape` (2D) and `shrink-spiral` (3D). `u-shape` and `o-shape` are the two
-that stress a simplifier — near-parallel legs whose tolerance balls overlap, and a closed
-loop with both endpoints pinned.
 
 ## Documents
 
