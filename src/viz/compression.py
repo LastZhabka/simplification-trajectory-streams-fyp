@@ -1,10 +1,10 @@
 """Distribution of our compression rate at each baseline's error, per baseline and m.
 
     python src/viz/compression.py --out "data/error-matched/[2026-10-29] Results - Compression rate distribution"
-                                  [--ours convex-shadow]
+                                  [--ours greedy-stabbing-shared]
 
 Reads every <matched>/<ours>/eps<E>/summary/<dataset>/<name>.json that ssk_match wrote, for
-one implementation of ours: convex-shadow unless --ours names another. For each eps
+one implementation of ours: greedy-stabbing-shared unless --ours names another. For each eps
 it draws one PNG: a grid of histograms, a row per baseline and a column per m, of n/|ours|
 over every trajectory, with the baseline's median n/|theirs| marked. Then it writes <out>.md
 with the same distributions as tables, the gain over the baseline, and coverage per dataset.
@@ -275,7 +275,7 @@ def report(rows: list[dict], out: Path, trajectories: dict[str, int], ours: str)
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--matched", default=os.path.join("data", "error-matched"))
-    parser.add_argument("--ours", default="convex-shadow", help="which implementation of ours")
+    parser.add_argument("--ours", default="greedy-stabbing-shared", help="which implementation of ours")
     parser.add_argument("--trajectories", default=os.path.join("data", "trajectories"))
     parser.add_argument("--out", required=True, help="path prefix for the .md and the PNGs")
     args = parser.parse_args()

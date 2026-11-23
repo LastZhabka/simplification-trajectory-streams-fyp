@@ -1,6 +1,6 @@
 // Run ours at every baseline operating point that ssk_frechet measured.
 //
-//   ssk_match --in data/trajectories/mopsi --eps 0.1 [--ours convex-shadow]
+//   ssk_match --in data/trajectories/mopsi --eps 0.1 [--ours greedy-stabbing-shared]
 //             [--distances data/frechet-distances] [--out data/error-matched]
 //
 // writes, for each trajectory,

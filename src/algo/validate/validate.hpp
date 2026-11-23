@@ -1,4 +1,5 @@
-// Checks of the invariants ConvexShadow's guarantee rests on, made while it runs.
+// Checks of the invariants ConvexShadow's guarantee rested on, made while it ran. ConvexShadow is
+// gone (UPDATES 65) and nothing is watched for now; the greedy stabbers will be.
 //
 // A failed check is counted, not thrown. A corpus run is hundreds of core-hours over a million
 // curves, and the failures worth finding are a handful of rounding cases among billions of

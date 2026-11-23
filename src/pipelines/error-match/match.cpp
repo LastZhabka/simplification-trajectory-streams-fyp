@@ -4,10 +4,7 @@
 #include <stdexcept>
 #include <utility>
 
-#include "simplify/convex_shadow.hpp"
-#include "simplify/convex_shadow_32.hpp"
-#include "simplify/convex_shadow_32_sidenorms.hpp"
-#include "simplify/convex_shadow_far_points.hpp"
+#include "simplify/greedy_stabbing.hpp"
 
 namespace ssk::pipelines {
 namespace {
@@ -21,19 +18,18 @@ const json::Value& field(const json::Value& doc, const char* key) {
 }
 
 std::unique_ptr<simplify::Simplifier<2>> make_ours(const std::string& ours,
-                                                   const simplify::Params& params,
-                                                   validate::Validator* validator) {
-  if (ours == "convex-shadow") {
-    return std::make_unique<simplify::ConvexShadow>(params, validator);
+                                                   const simplify::Params& params) {
+  if (ours == "greedy-stabbing-shared") {
+    return std::make_unique<simplify::GreedyStabbingShared>(params);
   }
-  if (ours == "convex-shadow-far-points") {
-    return std::make_unique<simplify::ConvexShadowFarPoints>(params, validator);
+  if (ours == "greedy-stabbing-naive") {
+    return std::make_unique<simplify::GreedyStabbingNaive>(params);
   }
-  if (ours == "convex-shadow-32") {
-    return std::make_unique<simplify::ConvexShadow32>(params, validator);
+  if (ours == "greedy-stabbing-naive-paper") {
+    return std::make_unique<simplify::GreedyStabbingNaivePaper>(params);
   }
-  if (ours == "convex-shadow-32-sidenorms") {
-    return std::make_unique<simplify::ConvexShadow32SideNorms>(params, validator);
+  if (ours == "greedy-stabbing-naive-paper-boundary") {
+    return std::make_unique<simplify::GreedyStabbingNaivePaperBoundary>(params);
   }
   throw std::runtime_error("error-match: no implementation of ours named '" + ours + "'");
 }
@@ -72,10 +68,9 @@ Match match(const frechet::Frechet<2>& computer, const std::string& ours,
   Match out;
   out.ours = ours;
   out.delta = field(field(baseline, "frechet"), "distance").num() / (1.0 + eps);
-  validate::Validator validator;
-  out.simplified =
-      make_ours(ours, {{"delta", out.delta}, {"eps", eps}}, validate ? &validator : nullptr)
-          ->simplify(input);
+  // No implementation of ours is watched yet: with --validate the counts are all zero.
+  const validate::Validator validator;
+  out.simplified = make_ours(ours, {{"delta", out.delta}, {"eps", eps}})->simplify(input);
   if (validate) {
     out.validation = validator.stats();
   }

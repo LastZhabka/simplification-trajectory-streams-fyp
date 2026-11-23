@@ -6,9 +6,10 @@ Fréchet distance, and the experiment that compares it with four published simpl
 
 What is here:
 
-- **Our algorithm**, `ConvexShadow`: Algorithm 1 of Cheng, Huang & Jiang, *Simplification of
-  Trajectory Streams* (SoCG 2025). Its output is within `(1+ε)·δ` of the input and has at most
-  `2·opt − 2` vertices.
+- **Our algorithms**, the greedy stabbers of *Faster δ-simplification of Trajectory Streams*,
+  after Cheng, Huang & Jiang, *Simplification of Trajectory Streams* (SoCG 2025). Their output is
+  within `(1+ε)·δ` of the input and has at most `2·opt − 2` vertices. `GreedyStabbingShared`
+  takes O(ε⁻¹) time per vertex.
 - **Four baselines** ported from their reference implementations: Douglas–Peucker (DPn),
   SQUISH, SQUISH-E and DOTS.
 - **The continuous Fréchet distance**, ported from the GIS Cup 2017 winner, to measure all of
@@ -203,15 +204,15 @@ and the trajectory document layer on top of it.
 **`simplify/`** holds the `Simplifier<D>` interface, the four baselines and ours:
 
 ```cpp
-#include "simplify/convex_shadow.hpp"
 #include "simplify/douglas_peucker.hpp"
+#include "simplify/greedy_stabbing.hpp"
 
 const auto curve = ssk::simplify::curve_of<2>(doc);
 
 ssk::simplify::DouglasPeucker<2> dp({{"count", 32}});
 const auto kept = dp.indices(curve);            // positions into `curve`
 
-ssk::simplify::ConvexShadow ours({{"delta", 1e-4}, {"eps", 0.1}});
+ssk::simplify::GreedyStabbingShared ours({{"delta", 1e-4}, {"eps", 0.1}});
 const auto simplified = ours.simplify(curve);   // points; ours invents its vertices
 ```
 
@@ -221,9 +222,10 @@ const auto simplified = ours.simplify(curve);   // points; ours invents its vert
 | SQUISH | caoweiquan322/dots | `buffer_size`, a vertex budget |
 | SQUISH-E | uestc-db/traj-compression | `cmp_ratio` and `sed_error` |
 | DOTS | caoweiquan322/dots | `lssd_threshold` |
-| ours, `ConvexShadow` | Cheng, Huang & Jiang, SoCG 2025 | `delta` and `eps` |
-| ours, `ConvexShadowFarPoints` | its first implementation, kept for comparison | `delta` and `eps` |
-| ours, `ConvexShadow32` | `ConvexShadow` with a regular m-gon, m = O(ε^(−1/2)), for `conv(G_v)` | `delta` and `eps` |
+| ours, `GreedyStabbingShared` | Algorithm 2 of the write-up: a regular m-gon, starts on the circle of radius δ, computations shared, O(ε⁻¹) per vertex | `delta` and `eps` |
+| ours, `GreedyStabbingNaive` | Algorithm 1: the same without the sharing, O(ε^(−3/2)) per vertex | `delta` and `eps` |
+| ours, `GreedyStabbingNaivePaper` | Algorithm 1 with the paper's `conv(G_v)` and every grid point as a start | `delta` and `eps` |
+| ours, `GreedyStabbingNaivePaperBoundary` | the same with the boundary cells' grid points only | `delta` and `eps` |
 
 The ports follow their sources statement for statement and are kept in that form. The one
 change to an upstream algorithm is in DOTS, which could join a point to a vertex that comes
@@ -276,8 +278,9 @@ mirrors the first one document for document.
 baseline's measured error. Ours is then no worse than the baseline, and the question is how
 many vertices it needs. It measures ours in the same pass, checks the bound exactly, and with
 `--validate` counts the invariant checks into every result. `--ours` picks the implementation,
-`convex-shadow` by default, `convex-shadow-far-points`, `convex-shadow-32` or
-`convex-shadow-32-sidenorms`, and each gets its own tree.
+`greedy-stabbing-shared` by default, `greedy-stabbing-naive`, `greedy-stabbing-naive-paper` or
+`greedy-stabbing-naive-paper-boundary`, and each gets its own tree. With `--validate` the
+counts are zero for now: no stabber is watched yet.
 
 **`scripts/comparison_stats.py`** turns the summaries into the tables: coverage, each
 baseline's error at a fixed rate, ours against each baseline, Theorem 3 checked, and the
@@ -322,7 +325,7 @@ loop with both endpoints pinned.
 |---|---|
 | [`docs/running.md`](docs/running.md) | every step from a fresh clone to the comparison tables, with costs |
 | [`docs/algorithm.md`](docs/algorithm.md) | our algorithm, `ssk_match`, the statistics and the validation |
-| [`docs/convex-shadow-32.md`](docs/convex-shadow-32.md) | the m-gon region, and why it has O(ε^(−1/2)) sides |
+| [`docs/convex-shadow-32.md`](docs/convex-shadow-32.md) | the m-gon region, and why it has O(ε^(−1/2)) sides; the greedy stabbers in §10–11 |
 | [`docs/comparison.md`](docs/comparison.md) | the experimental protocol and what it can claim |
 | [`docs/simplification.md`](docs/simplification.md) | the baselines: interface, ports, deviations, verification |
 | [`docs/frechet-distance.md`](docs/frechet-distance.md) | the Fréchet port and its measurements |

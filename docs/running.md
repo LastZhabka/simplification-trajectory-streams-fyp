@@ -389,18 +389,18 @@ this is how to run it.
 It needs the build and step 6's `data/frechet-distances/`; a trajectory with no baseline
 document is skipped. **`--eps` is required**, and each value is its own run under its own root.
 
-**`--ours` picks the implementation**: `convex-shadow`, the default;
-`convex-shadow-far-points`, its first implementation, kept for comparison;
-`convex-shadow-32`, which uses a regular m-gon for `conv(G_v)`
-([convex-shadow-32.md](convex-shadow-32.md)); or `convex-shadow-32-sidenorms`, the same with
-each shadow kept as m offsets and two rays (§8 there). Each is also its own run, under
+**`--ours` picks the implementation**: `greedy-stabbing-shared`, the default, O(ε⁻¹) per
+vertex ([convex-shadow-32.md](convex-shadow-32.md) §11); `greedy-stabbing-naive`, the same
+without the sharing, O(ε^(−3/2)) per vertex (§10 there); or `greedy-stabbing-naive-paper` and
+`greedy-stabbing-naive-paper-boundary`, Algorithm 1 with the paper's `conv(G_v)` and grid
+starts. Each is also its own run, under
 `data/error-matched/<ours>/`. The commands below set it once at the top as `$ours`; to run
 another, change that line and run them again.
 
 One dataset at all three ε, 8 processes at a time:
 
 ```powershell
-$ours = "convex-shadow"
+$ours = "greedy-stabbing-shared"
 $ds = "mot-dancetrack"
 New-Item -ItemType Directory -Force data\error-matched | Out-Null
 foreach ($eps in "0.5", "0.3", "0.1") {
@@ -415,7 +415,7 @@ Get-Content data\error-matched\$ours-$ds-eps*-shard*.log
 ```
 
 ```sh
-ours=convex-shadow
+ours=greedy-stabbing-shared
 ds=mot-dancetrack
 mkdir -p data/error-matched
 for eps in 0.5 0.3 0.1; do
@@ -431,7 +431,7 @@ For the corpus, wrap that in a loop over the datasets, one ε at a time so the c
 finish first:
 
 ```powershell
-$ours = "convex-shadow"
+$ours = "greedy-stabbing-shared"
 New-Item -ItemType Directory -Force data\error-matched | Out-Null
 foreach ($eps in "0.5", "0.3", "0.1") {
   foreach ($ds in (Get-ChildItem data\trajectories -Directory).Name) {
@@ -446,7 +446,7 @@ foreach ($eps in "0.5", "0.3", "0.1") {
 ```
 
 ```sh
-ours=convex-shadow
+ours=greedy-stabbing-shared
 mkdir -p data/error-matched
 for eps in 0.5 0.3 0.1; do
   for ds in data/trajectories/*/; do
@@ -458,15 +458,14 @@ for eps in 0.5 0.3 0.1; do
 done
 ```
 
-Each implementation is another full step 7. If time is short, run `convex-shadow` and
-`convex-shadow-32` on the whole corpus, since they differ in the region and so in the
-results, and `convex-shadow-far-points` on one dataset at one ε: it gives `convex-shadow`'s
-vertex count on every sample checked so far (§4 of [algorithm.md](algorithm.md)), and that
-dataset is enough to confirm it.
+Each implementation is another full step 7. If time is short, run `greedy-stabbing-shared` on
+the whole corpus, and `greedy-stabbing-naive` on one dataset at one ε: it gives
+`greedy-stabbing-shared`'s output to the bit on every run checked so far (§11 of
+[convex-shadow-32.md](convex-shadow-32.md)), and that dataset is enough to confirm it.
 
 It is resumable as a whole: run it again and finished trajectories are skipped.
 
-Each shard ends with:
+Each shard ends with a line like this one, from a run of the former `convex-shadow`:
 
 ```
 convex-shadow mot-dancetrack eps=0.5: 87 trajectories -> 1553 matches over 1337209 points in 1156.1 s

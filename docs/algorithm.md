@@ -1,5 +1,10 @@
 # Our algorithm, and running it against the baselines
 
+> **The implementations this page describes are gone** (UPDATES 65): `ConvexShadow` and
+> `ConvexShadowFarPoints` were removed from `src/algo/simplify/`, and are as described here at
+> commit 902a3c5. Ours are now the greedy stabbers ([convex-shadow-32.md](convex-shadow-32.md)
+> §10–11). §5 on how `ssk_match` runs still holds, with their names.
+
 What our simplifier does, step by step; how `src/algo/simplify/convex_shadow.cpp` implements
 it; and how `ssk_match` and `scripts/comparison_stats.py` run it through the protocol in
 [comparison.md](comparison.md).
@@ -310,11 +315,13 @@ tolerance (`1e-9` of the bounding-box diagonal) that `ssk_frechet` used on the b
 protocol reports measured error on both sides, and measuring here saves reading 786 642
 results back from disk.
 
-**It runs one implementation of ours**, named by `--ours`: `convex-shadow`, the default;
-`convex-shadow-far-points`, its first implementation (§4, *How `behind` builds F*);
-`convex-shadow-32`, the same with a regular m-gon for `conv(G_v)`
-([convex-shadow-32.md](convex-shadow-32.md)); or `convex-shadow-32-sidenorms`, which keeps each
-of its shadows as m offsets and two rays (§8 there). Each is its own run, as each ε is, so they can be
+**It runs one implementation of ours**, named by `--ours`: `greedy-stabbing-shared`, the
+default, Algorithm 2 of the write-up with the offsets and the corners shared
+([convex-shadow-32.md](convex-shadow-32.md) §11); `greedy-stabbing-naive`, Algorithm 1, with
+offsets and a cone per start (§10 there); or `greedy-stabbing-naive-paper` and
+`greedy-stabbing-naive-paper-boundary`, Algorithm 1 with the paper's `conv(G_v)` and grid
+starts, all of them or the boundary cells' only. With `--validate` the counts are zero: no
+stabber is watched yet. Each is its own run, as each ε is, so they can be
 compared on the same baseline operating points.
 
 **It writes**, under a root per implementation and ε:
@@ -339,7 +346,7 @@ It exists so that the statistics read one small file per trajectory instead of e
 |---|---|---|
 | `--in DIR` | required | a dataset directory of trajectory documents |
 | `--eps E` | required | ours alone, so each value is its own run, and a result must say which it used |
-| `--ours NAME` | `convex-shadow` | which implementation of ours: `convex-shadow`, `convex-shadow-far-points`, `convex-shadow-32` or `convex-shadow-32-sidenorms` |
+| `--ours NAME` | `greedy-stabbing-shared` | which implementation of ours: `greedy-stabbing-shared`, `greedy-stabbing-naive`, `greedy-stabbing-naive-paper` or `greedy-stabbing-naive-paper-boundary` |
 | `--distances DIR` | `data/frechet-distances` | the baselines' measurements |
 | `--out DIR` | `data/error-matched` | root of the result tree |
 | `--tol REL` | `1e-9` | Fréchet bisection tolerance, relative to the input's diagonal, as in `ssk_frechet` |

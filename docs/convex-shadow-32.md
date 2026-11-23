@@ -1,5 +1,10 @@
 # ConvexShadow32: a regular m-gon instead of conv(G_v)
 
+> **§1–9 describe implementations that are gone** (UPDATES 65): `ConvexShadow32`,
+> `ConvexShadow32SideNorms` and `ConvexShadowInvertLin`, as of commit 902a3c5 (the last kept in
+> `archive/removed-simplify/`). The m-gon argument of §1–5 is what the greedy stabbers of
+> §10–11 use.
+
 `ConvexShadow32` (`src/algo/simplify/convex_shadow_32.{hpp,cpp}`, `--ours convex-shadow-32`)
 is `ConvexShadow` with one change: the region around each input vertex `v` is not `conv(G_v)`,
 the hull of a grid, but `P_v`, a **regular m-gon** around `v`. This page says what the region
@@ -256,3 +261,212 @@ inradius.
 Storing no polygon changed no output: the same 1 701 runs are identical to the bit with the
 version that kept one, and run in the same time within noise (29.4–31.8 s against 30.5–34.5 s
 at ε = 0.1, three runs each).
+
+## 9. ConvexShadowInvertLin: shared minima and per-start cones, O(ε⁻¹) per vertex
+
+`ConvexShadowInvertLin` (`src/algo/simplify/convex_shadow_invert_lin.{hpp,cpp}`,
+`--ours convex-shadow-invert-lin`) implements Algorithm 1 of the manuscript *Planar Streaming
+Simplification in O(ε⁻¹) Space and Update Time* (16 November 2026). It inverts §8: the m
+offsets are shared by every start, and each start keeps only a cone.
+
+**What it stores**, for the open run:
+
+| | size |
+|---|---|
+| the run's first vertex `v_s` and the M start offsets on the circle of radius `ρ` | O(M) |
+| `minima`: per normal, the smallest offset of the run's m-gons so far, `Hᵢ` | m |
+| per start: alive, and a cone at `p`, the whole plane or two rays | O(M) |
+| the buffered segment `(p, q)` | O(1) |
+
+No offsets per start and no polygon per start: a side `p` is strictly beyond always has offset
+`Hᵢ` (Lemma 3 of the manuscript), so one shared vector serves every start.
+
+**What it computes for a vertex `v`**, with incoming offsets `aᵢ = nᵢ·v + h`:
+
+1. **Blocks.** For each of the 2m thresholds `Hᵢ` and `aᵢ`, the starts strictly beyond it form
+   one arc of the circle; two binary searches, on the two monotone halves of `nᵢ·p`, find its
+   ends. The at most 4m ends cut the starts into at most 4m + 1 blocks, on which every sign is
+   the same.
+2. **Per block**, at its first start: `bᵢ = min(aᵢ, Hᵢ)` where `Hᵢ < nᵢ·p`, `aᵢ` elsewhere, and
+   `B` their intersection, by one deque pass over the normals in order, O(m). The corner where
+   the sides facing `p` start and the one where they stop are the tangent contacts, the same for
+   the whole block.
+3. **Per start**, O(1): the cone is cut to the rays through those two corners; an empty or
+   zero-width cone kills the start. A start inside `B` keeps its cone.
+4. **The first survivor**: `B` cut by its cone is its shadow; `q` is its point nearest `v`, and
+   `(p, q)` becomes the buffer.
+5. Survivors: `Hᵢ ← min(Hᵢ, aᵢ)`. None: the buffer is emitted and a run starts at `v`.
+
+That is O(m log M + m log m + m² + M) per vertex, O(ε⁻¹) with M = Θ(ε⁻¹) and m = Θ(ε^(−1/2)).
+
+**What differs from the other m-gon implementations.** The starts are the manuscript's:
+M = ⌈4π(1 + ε/2)/ε⌉ points on the circle of radius `ρ` around `v_s`, 32 at ε = 0.5 and 132 at
+ε = 0.1, against 120 and 472 boundary grid points. Comparisons with `p` are strict. All starts
+are at the same distance from `v_s`, so the first survivor is emitted. `--validate` checks the
+region and the segments only; there are no per-start shadows to check.
+
+**Measured** (2026-11-17), on the 1 701 validated runs of §6:
+
+- Against a brute-force reference that runs the manuscript's recurrence with an explicit
+  polygon per start (the same starts and strict rules; it passes 0 failures in 44 257 693
+  checks): equal vertex counts in every run, 1 597 identical to the bit and the rest within
+  7.6e-10 δ.
+- 0 over the bound by the exact decision; 0 failures in 37 187 checks.
+- 63 819 vertices against `convex-shadow-32`'s 63 355 (+0.7%; larger in 191 runs, smaller in
+  1), the price of the sparser starts.
+- Unvalidated, two runs each:
+
+| | `convex-shadow-32` | `convex-shadow-32-sidenorms` | `convex-shadow-invert-lin` |
+|---|---:|---:|---:|
+| ε = 0.5 | 9.7–9.9 s | 5.6 s | 0.61–0.66 s |
+| ε = 0.1 | 57.7–58.2 s | 29.3–30.2 s | 1.32–1.35 s |
+
+## 10. GreedyStabbingNaive: the naive planar algorithm, O(ε^(−3/2)) per vertex
+
+`GreedyStabbingNaive` (`src/algo/simplify/greedy_stabbing.{hpp,cpp}`, `--ours
+greedy-stabbing-naive`; `greedy-stabbing` before entry 62)
+implements Algorithm 1 of the write-up *Faster δ-simplification of Trajectory Streams*, its
+naive planar algorithm. The region is §6's m-gon; each start keeps its own offsets, as in §8,
+and a cone instead of a polygon, as in §9.
+It is the first `GreedyStabber` (`src/algo/simplify/greedy_stabber.hpp`): the loop over the
+vertices, the restarts and the last segment are the base's, and the steps below its overrides.
+Its geometry is `src/algo/geometry/`, and it uses nothing of the other implementations: the
+region is a `ConvexPolygon` and the side count its own, the same m as `ConvexShadow32::sides`.
+
+**What it stores**, for the open run:
+
+| | size |
+|---|---|
+| per start `p`: the m offsets `d_k`, the minimum of `b + n_k·v` over the run's vertices after its first | O(Mm) |
+| per start: `R(S[p], p)`, the whole plane or two rays from `p` | O(M) |
+
+**What it computes for a vertex `v`**, for each start, O(m):
+
+1. `d_k ← min(d_k, b + n_k·v)`, with `b` the m-gon's apothem.
+2. `Q[p]`: offset `d_k` on the sides `p` is strictly beyond (`V[p]`), `b + n_k·v` on the rest,
+   by one deque pass over the normals in angular order.
+3. `R(Q[p], p)`: the whole plane if `V[p]` is empty; otherwise the rays through the two corners
+   where the sides in `V[p]` start and stop; nothing if `Q[p]` is empty or has no area.
+4. `R ← R ∩ R(Q[p], p)`. An empty or zero-width cone kills the start.
+
+With no survivor, the first start that survived the step before is emitted, with the point of
+`S[p] = Q[p] ∩ R` nearest the run's last vertex, and a run starts at `v`. That is O(Mm) per
+vertex, O(ε^(−3/2)) with M = Θ(ε⁻¹) and m = Θ(ε^(−1/2)).
+
+**What differs from the other m-gon implementations.**
+
+- **The starts**: M = ⌈2π/ε⌉ points on the circle of radius `δ` around the run's first vertex.
+  That is 13, 21 and 63 at ε = 0.5, 0.3 and 0.1, against §9's 32, 49 and 132 on the circle of
+  radius `ρ`. Every point of the `δ`-circle is within `εδ/2` of a start, and the greedy may
+  start on the circle instead of in the disk, so the witness stabs balls of radius
+  `(1 + ε/2)δ = ρ`, which the m-gon contains.
+- **The normals** are at angles `2πk/m`, not §6's `π(2k+1)/m`. Any rotation will do.
+- **The paper's region and starts**, the same algorithm otherwise. `GreedyStabbingNaivePaper`
+  (`--ours greedy-stabbing-naive-paper`) takes both from `G_v`, the cells of side `εδ/(2√2)`,
+  with `v` at a corner, that meet the disk of radius `ρ`. The region is `conv(G_v)`, its hull,
+  taken in cells, where grid points in a line are exactly in a line, then scaled and turned
+  into its edges' half-planes. The starts are every grid point of `G_v`.
+  `GreedyStabbingNaivePaperBoundary` (`--ours greedy-stabbing-naive-paper-boundary`) has the same
+  region and keeps only the corners of the cells that meet the circle, the starts of §6–8. All of
+  it is built in `greedy_stabbing.cpp`, not taken from those implementations, and the starts are
+  ordered nearest `v` first, so the start emitted is the nearest that survived:
+
+  | ε | m-gon sides | `conv(G_v)` sides | circle of radius `δ` | every grid point | boundary cells |
+  |---|---:|---:|---:|---:|---:|
+  | 0.5 | 6 | 12 | 13 | 225 | 120 |
+  | 0.3 | 7 | 16 | 21 | 461 | 168 |
+  | 0.1 | 11 | 28 | 63 | 3 009 | 472 |
+- **`--validate` checks nothing yet**: the validator was taken out to keep it small, and a
+  validated run reports 0 checks. The numbers below were measured with it in (entry 58).
+
+**Measured** (2026-11-23), on the first 150 Mopsi and 40 GeoLife trajectories, ε ∈ {0.5, 0.3,
+0.1}, with δ at 0.0005, 0.003 and 0.02 of each trajectory's extent: 1 710 runs.
+
+- Against a brute-force reference with an explicit polygon per start, stepped as
+  `S ← A_v ∩ F(S, p)` from that polygon's own edges and tangents (no offsets, no `V`, no cones;
+  the same starts and emission): equal vertex counts in every run, 1 614 identical to the bit and
+  the rest within 4.3e-8 δ. The reference at first disagreed in one run. The fault was its own:
+  a cut through a corner left an edge a few ulps long, whose direction is noise. Once it skips
+  such edges, the two agree. `greedy_stabbing.cpp` never uses a shadow's edges.
+- 0 over the bound by the exact decision; 0 failures in 28 348 997 checks of the region, every
+  start's shadow and the segments.
+- Vertices and time, unvalidated, one run each, all four in the same session:
+
+| | `convex-shadow-32` | `convex-shadow-32-sidenorms` | `convex-shadow-invert-lin` | `greedy-stabbing-naive` |
+|---|---:|---:|---:|---:|
+| ε = 0.5 | 21 194, 13.9 s | 21 194, 8.3 s | 21 416, 0.81 s | 21 774, 1.89 s |
+| ε = 0.3 | 22 352, 24.9 s | 22 352, 11.6 s | 22 503, 1.03 s | 22 709, 3.11 s |
+| ε = 0.1 | 23 792, 84.5 s | 23 792, 43.5 s | 23 862, 1.69 s | 23 960, 10.3 s |
+
+That is +2.7%, +1.6% and +0.7% vertices against `convex-shadow-32`, the price of the sparser
+starts, at 3.7–4.4× the speed of `convex-shadow-32-sidenorms`.
+
+## 11. GreedyStabbingShared: Algorithm 2, O(ε⁻¹) per vertex
+
+`GreedyStabbingShared` (`src/algo/simplify/greedy_stabbing.{hpp,cpp}`, `--ours
+greedy-stabbing-shared`) implements Algorithm 2 of the same write-up: §10 with the computations
+shared between starts. Same region, starts and emission; another `GreedyStabber`.
+
+**What it stores**, for the open run:
+
+| | size |
+|---|---|
+| the run's first vertex `c` | O(1) |
+| the m offsets `d_k`, shared by every start | m |
+| per start: its index on the circle, `p`, and `R(S[p], p)` | O(M) |
+
+**What it computes for a vertex `v`**:
+
+1. `d'_k = min(d_k, b + n_k·v)`.
+2. **Marks.** Each line `n_k·x = d'_k` meets the circle of radius `δ` around `c` in at most two
+   points, found by angle: `cos(θ − α_k) = (d'_k − n_k·c)/δ`. Only there can the set of sides a
+   start is beyond, `V[p]`, change. The starts are evenly spaced, so the starts just after a
+   crossing are found by dividing its angle by the spacing, with no sort: each crossing marks
+   the starts within a quarter spacing of it and the next, as an angle and a dot product round
+   differently.
+3. **Per start**, in order: after a mark, or at the first start, `Q[p]` and its two corners are
+   built from `p`, O(m). Until the next mark they are the same, as they depend on `p` only
+   through `V[p]`, and each start only forms its two rays from them and cuts its cone, O(1).
+4. With survivors, `d ← d'`; without, the start that survived last emits as in §10, with the
+   `d` it reached.
+
+That is O(m) crossings, O(M) marks and starts, and at most 4m + 1 builds of O(m): O(M + m²)
+per vertex, O(ε⁻¹). The text's sort of the crossings, O(m log m), is not needed.
+
+**Against §10**: every start sees the same `Q[p]` and corners as there, so the output is meant
+to be the same to the bit, and is.
+
+**Measured** (2026-11-23), all four stabbers on the 1 710 runs of §10 (150 Mopsi and 40 GeoLife
+trajectories, ε ∈ {0.5, 0.3, 0.1}, δ at 0.0005, 0.003 and 0.02 of each extent), no validator:
+
+- **`greedy-stabbing-shared` is `greedy-stabbing-naive` to the bit** in all 1 710 runs.
+- **0 over the bound** by the exact decision, for all four.
+- **Against the brute-force reference of §10**, generalised to take the region as corners
+  (the m-gon, or the hull of the grid taken directly) and the starts as a list, and stepping an
+  explicit polygon per start: equal vertex counts in every run for all three kinds of Algorithm 1
+  (`greedy-stabbing-naive-paper` at ε 0.5 and 0.3 only, 1 140 runs; the reference is slow with
+  3 009 starts). The naive one is identical to the bit in 1 614 runs, the rest within 4.3e-8 δ.
+  The two paper ones are identical in 1 622 and 1 076 runs, but up to 5 δ apart in a few:
+- **A start on the region's boundary.** When a vertex repeats the one before, `G_v`'s grid
+  points on the hull of the previous region lie exactly on the new region's edges. Whether such
+  a start is beyond a side is then decided by rounding: ours may find it an ulp beyond, give it a
+  cone of width about π, or kill it, where it is in the region and should see the whole plane.
+  The reference, with its own predicates, keeps it. At a repeated vertex at (123.456, −78.9),
+  δ = 0.7: ε = 0.5 keeps all 225 starts but 9 lose the whole plane; ε = 0.3 kills 1 of 461 and
+  restricts 7 more; ε = 0.1 kills 3 of 3 009 and restricts 11. Every run more than 1e-6 δ apart
+  is on a trajectory with exact repeats (in `mopsi-000111` the second point is the first, and
+  the outputs differ from the first vertex). This errs inward, so the bound holds; and the
+  starts the size bound relies on are well inside the region, so it holds too. The circle's
+  starts are at δ, inside the m-gon, and never meet it.
+- **Vertices and time**, one run each; at ε 0.3 and 0.1 beside one or two other single-threaded
+  jobs on 8 cores:
+
+| ε | `greedy-stabbing-naive` | `greedy-stabbing-shared` | `greedy-stabbing-naive-paper-boundary` | `greedy-stabbing-naive-paper` |
+|---|---:|---:|---:|---:|
+| 0.5 | 21 774, 2.02 s | 21 774, 0.62 s | 21 003, 24.1 s | 20 994, 47.1 s |
+| 0.3 | 22 709, 3.94 s | 22 709, 0.80 s | 22 389, 37.9 s | 22 382, 114 s |
+| 0.1 | 23 960, 12.3 s | 23 960, 1.67 s | 23 770, 176 s | 23 764, 1 052 s |
+
+The sharing is 3.3×, 4.9× and 7.4× at ε 0.5, 0.3 and 0.1. The paper's `conv(G_v)` and grid
+starts take 0.8–3.6% fewer vertices than the m-gon and circle, for 12–85× the naive stabber's
+time and 39–630× the shared one's.

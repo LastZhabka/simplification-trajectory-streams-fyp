@@ -1,6 +1,5 @@
 // The validator has to fail on what is wrong as well as pass what is right, or a count of
 // zero failures says nothing.
-#include "simplify/convex_shadow.hpp"
 #include "test_main.hpp"
 #include "validate/validate.hpp"
 
@@ -149,34 +148,6 @@ TEST("validate/a segment must meet every disk, and in order") {
   Validator wide;
   wide.segment({0, 0}, {10, 0}, back, 11.0);
   CHECK(failures(wide, Check::SegmentStabs) == 0);
-}
-
-TEST("validate/convex-shadow passes its own invariants and is unchanged by being watched") {
-  using ssk::simplify::Curve;
-  std::vector<Curve<2>> curves(3);
-  for (int i = 0; i < 300; ++i) {
-    const double t = 0.05 * i;
-    curves[0].push_back({t * std::cos(t), t * std::sin(t)});
-    curves[1].push_back({0.5 * i, (i % 2 == 0) ? 0.0 : 1.2});
-    curves[2].push_back({10.0 * std::sin(0.11 * i) + 0.01 * i, 7.0 * std::sin(0.07 * i)});
-  }
-  for (const Curve<2>& curve : curves) {
-    for (const double eps : {0.5, 0.1}) {
-      for (const double delta : {0.05, 0.4, 2.0}) {
-        const ssk::simplify::Params params{{"delta", delta}, {"eps", eps}};
-        Validator v;
-        const Curve<2> watched = ssk::simplify::ConvexShadow(params, &v).simplify(curve);
-        CHECK(watched == ssk::simplify::ConvexShadow(params).simplify(curve));
-        CHECK(checks(v, Check::GridHull) == 1);
-        CHECK(checks(v, Check::ShadowBehind) > 0);
-        CHECK(checks(v, Check::SegmentStabs) > 0);
-        for (std::size_t i = 0; i < ssk::validate::kChecks; ++i) {
-          CHECK_MSG(v.stats()[i].failed == 0,
-                    std::string(ssk::validate::name(static_cast<Check>(i))) + " failed");
-        }
-      }
-    }
-  }
 }
 
 }  // namespace

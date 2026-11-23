@@ -1,11 +1,14 @@
 # CLAUDE.md
 
 Streaming δ-simplification of trajectory streams under the continuous Fréchet distance.
-FYP. Ours is `ConvexShadow` in `src/algo/simplify/`, described in `docs/algorithm.md`.
-Beside it, `ConvexShadowFarPoints` is its first implementation, kept for comparison, and
-`ConvexShadow32` replaces `conv(G_v)` by a regular m-gon (`docs/convex-shadow-32.md`), and
-`ConvexShadow32SideNorms` keeps each of its shadows as m offsets and two rays (§8 there); the
-rest is the baselines they are compared with and the pipelines that run the comparison.
+FYP. Ours are the greedy stabbers in `src/algo/simplify/greedy_stabbing.{hpp,cpp}`, each a
+`GreedyStabber` (`greedy_stabber.hpp`), whose `run` is the greedy loop they share:
+`GreedyStabbingNaive` and `GreedyStabbingShared` are Algorithms 1 and 2 of the write-up, O(ε^(−3/2))
+and O(ε⁻¹) per vertex, and `GreedyStabbingNaivePaper` and `GreedyStabbingNaivePaperBoundary` are
+Algorithm 1 with the paper's `conv(G_v)` and grid starts (`docs/convex-shadow-32.md` §10–11). The
+rest is the baselines they are compared with and the pipelines that run the comparison. The
+convex-shadow implementations are gone (UPDATES 65): `docs/algorithm.md` and
+`docs/convex-shadow-32.md` §1–9 describe them as of commit 902a3c5.
 
 ## Style
 
@@ -26,8 +29,9 @@ rest is the baselines they are compared with and the pipelines that run the comp
 | `data/` | `downloads/` `trajectories/` `simplified-trajectories/` `frechet-distances/` `error-matched/` `synthetic/` `renders/` | All git-ignored. Gigabytes, and licence-restricted. Commands are committed, data is not. |
 | `tests/` | C++ unit tests. | Own ~60-line harness — GoogleTest via FetchContent would break an offline configure. |
 | `src/algo/frechet/` | Continuous Frechet distance, `Frechet<D>`. | Ported from the GIS Cup 2017 winner (MIT, standard library only), cross-verified against two independent implementations. The decision `within()` is the primitive and is exact; `distance()` bisects it. |
-| `src/algo/simplify/` | `Simplifier<D>` + Douglas-Peucker, SQUISH, SQUISH-E, DOTS. | Ports of the reference implementations, not reinventions — match upstream behaviour and record any deviation in `docs/simplification.md`. **Keep them in upstream's form: no restructuring or clean-up of the ports or of `frechet/`.** Dimension is a template parameter; `simplify()` returns points because a future algorithm may invent them, and `SubsetSimplifier` adds `indices()` for the ones that don't. |
-| `src/algo/validate/` | `validate::Validator`: checks `ConvexShadow`'s invariants as it runs and counts the outcomes. | Counts, never throws — a corpus run must report how many checks failed, not stop at the first. Its predicates are its own, not the algorithm's, so the two can disagree. Off unless a validator is passed (`ssk_match --validate`), because it costs 2–3.5×. |
+| `src/algo/simplify/` | `Simplifier<D>` + Douglas-Peucker, SQUISH, SQUISH-E, DOTS, and ours, the greedy stabbers. | Ports of the reference implementations, not reinventions — match upstream behaviour and record any deviation in `docs/simplification.md`. **Keep them in upstream's form: no restructuring or clean-up of the ports or of `frechet/`.** Dimension is a template parameter; `simplify()` returns points because a future algorithm may invent them, and `SubsetSimplifier` adds `indices()` for the ones that don't. |
+| `src/algo/geometry/` | Plane geometry for the greedy stabbers: `Vec`, `ConvexPolygon` as unit normals and offsets, cones from a point, clipping, the hull. | The stabbers depend on it and on `GreedyStabber`, never on `validate` or on one another. |
+| `src/algo/validate/` | `validate::Validator`: checks a shadow-keeping algorithm's invariants as it runs and counts the outcomes. Written for the convex-shadow implementations; no stabber is watched yet, so `--validate` counts zero. | Counts, never throws — a corpus run must report how many checks failed, not stop at the first. Its predicates are its own, not the algorithm's, so the two can disagree. Off unless a validator is passed (`ssk_match --validate`), because it costs 2–3.5×. |
 | `docs/` | `datasets.md`, `trajio.md`, `simplification.md`, `algorithm.md`, `convex-shadow-32.md`, `comparison.md`, `pipeline.md`, `frechet-distance.md`, `references.md`, `running.md` | Measured numbers, not quoted ones. |
 | `src/pipelines/` | Experiment drivers, one directory each: `simplify-sweep` (`ssk_simplify`), `frechet-distance` (`ssk_frechet`), `error-match` (`ssk_match`), `audit` (`ssk_audit`). `corpus.{hpp,cpp}` is what they share: file list, sharding, atomic document write. | The algorithms are C++, so the driver is too — a Python one would spawn a process per trajectory. Entry points live with their piece under `src/`, as `viz` and `trajio` already do. Each keeps its logic in a library beside a thin `main`, so the tests drive it without running the binary. |
 
