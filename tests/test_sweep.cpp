@@ -75,9 +75,9 @@ TEST("sweep/the rates start where asked, numbered by m") {
             "SQUISH's floor still ends the sweep early");
 
   const Sweep sweep = ssk::pipelines::sweep_dpn(wander(1000), ssk::pipelines::Rates{});
-  CHECK(sweep.runs.size() == 6);
-  CHECK(sweep.runs.front().m == 3 && sweep.runs.front().target == 125);
-  CHECK(sweep.runs.back().m == 8 && sweep.runs.back().target == 4);
+  CHECK_MSG(sweep.runs.size() == 5, "the default is m = 2..6");
+  CHECK(sweep.runs.front().m == 2 && sweep.runs.front().target == 250);
+  CHECK(sweep.runs.back().m == 6 && sweep.runs.back().target == 16);
 }
 
 TEST("sweep/--rates reads FIRST..LAST") {

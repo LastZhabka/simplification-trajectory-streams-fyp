@@ -1,5 +1,5 @@
 // Simplify every trajectory in a dataset directory with all four baselines, at a fixed
-// compression rate of 1/2^m for each m in --rates, 3..8 unless told otherwise.
+// compression rate of 1/2^m for each m in --rates, 2..6 unless told otherwise.
 //
 //   ssk_simplify --in data/trajectories/mopsi --out data/simplified-trajectories
 //

@@ -32,7 +32,7 @@ on disk is always a whole one. What the experiment is *for* is
 |---|---|---|
 | `--in DIR` | required | a dataset directory of trajectory documents; `index.json` is skipped |
 | `--out DIR` | `data/simplified-trajectories` | root of the result tree |
-| `--rates A..B` | `3..8` | the compression rates, `2^A` to `2^B`: budgets `ceil(N / 2^m)` for m = A…B |
+| `--rates A..B` | `2..6` | the compression rates, `2^A` to `2^B`: budgets `ceil(N / 2^m)` for m = A…B |
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process only every Nth trajectory, starting at I |
 | `--no-dots` | off | run DPn, SQUISH and SQUISH-E only — see *The one trajectory DOTS does not cover* |
@@ -95,7 +95,7 @@ the trade being made.
 ## What a corpus run costs
 
 Measured on this machine (MinGW g++ 15.1 `-O2`, 8 cores), one pass over all nine datasets at
-m = 1…6, the range before the default became 3…8:
+m = 1…6, the first corpus's range (the default is now 2…6):
 
 | Dataset | Trajectories | Points | Documents | Wall time |
 |---|---:|---:|---:|---:|
@@ -198,7 +198,7 @@ and elapsed time — rather than trusting the arithmetic above.
 | `--simplified DIR` | `data/simplified-trajectories` | the tree to measure |
 | `--out DIR` | `data/frechet-distances` | root of the measurement tree |
 | `--tol REL` | `1e-9` | bisection tolerance, **relative** to the input's bounding-box diagonal |
-| `--rates A..B` | `3..8` | the compression rates looked for, `2^A` to `2^B` |
+| `--rates A..B` | `2..6` | the compression rates looked for, `2^A` to `2^B` |
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process only every Nth trajectory, starting at I |
 | `--skip-existing` | off | do not recompute a measurement already on disk, making an interrupted run resumable |

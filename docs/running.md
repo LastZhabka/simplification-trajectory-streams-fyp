@@ -191,7 +191,7 @@ change leaves the old files behind. Empty the directory first if the format has 
 ## 5. Simplify
 
 Every baseline — DPn, SQUISH, SQUISH-E and DOTS — on every trajectory, at `ceil(N / 2^m)`
-vertices for m = 3…8 (`--rates A..B` picks others). At m = 1…6, the three without SQUISH-E
+vertices for m = 2…6 (`--rates A..B` picks others). At m = 1…6, the three without SQUISH-E
 produced **786 642 documents, about 9 GB**. The eight smaller datasets first:
 
 ```powershell

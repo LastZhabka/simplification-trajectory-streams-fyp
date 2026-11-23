@@ -350,7 +350,7 @@ It exists so that the statistics read one small file per trajectory instead of e
 | `--distances DIR` | `data/frechet-distances` | the baselines' measurements |
 | `--out DIR` | `data/error-matched` | root of the result tree |
 | `--tol REL` | `1e-9` | Fréchet bisection tolerance, relative to the input's diagonal, as in `ssk_frechet` |
-| `--rates A..B` | `3..8` | the compression rates looked for, `2^A` to `2^B` |
+| `--rates A..B` | `2..6` | the compression rates looked for, `2^A` to `2^B` |
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process every Nth trajectory, starting at I |
 | `--skip-existing` | off | skip a trajectory whose summary exists |

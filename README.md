@@ -232,7 +232,7 @@ python scripts\comparison_stats.py --matched data\error-matched
 ```
 
 **`ssk_simplify`** runs every baseline on every trajectory at a fixed compression rate of
-`1/2^m` for m = 3…8 (`--rates`). DPn and SQUISH take the budget directly, SQUISH-E takes the rate, and
+`1/2^m` for m = 2…6 (`--rates`). DPn and SQUISH take the budget directly, SQUISH-E takes the rate, and
 DOTS has its threshold searched for. Each result is a trajectory document in its own right.
 
 **`ssk_frechet`** measures how far each simplification is from its input, in a tree that

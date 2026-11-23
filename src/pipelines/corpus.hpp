@@ -15,8 +15,8 @@ inline const std::vector<std::string> kBaselines{"douglas-peucker-n", "squish", 
 // Compression rates 2^first to 2^last: at each m in between, a trajectory of N points is asked
 // for ceil(N / 2^m) vertices, and its documents go under m<m>/.
 struct Rates {
-  int first = 3;
-  int last = 8;
+  int first = 2;
+  int last = 6;
 };
 
 // `FIRST..LAST`, as --rates takes it; nothing unless 1 <= FIRST <= LAST.

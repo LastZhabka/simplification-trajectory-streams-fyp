@@ -395,7 +395,7 @@ largest, which is why the cutoff there is a name and not a length.
 
 **Length decides how many rates a trajectory supports.** A budget of `ceil(N / 2^m)` must
 stay at or above 2 vertices, and at or above 5 for SQUISH, so a short trajectory contributes
-to the shallow rates only. At m = 1…6, the range before the default became 3…8, that is why
+to the shallow rates only. At m = 1…6, the first corpus's range (the default is now 2…6), that is why
 `>= 64` points (all six rates for DPn and DOTS) and `>= 320` (all six for SQUISH) matter:
 90% and 63% of GeoLife qualifies, but only 61% and 26% of `mot-mot17`, and 72% and 20% of
 `ngsim-peachtree`. **175 trajectories across the corpus — 1 or 2 points each — supported no
