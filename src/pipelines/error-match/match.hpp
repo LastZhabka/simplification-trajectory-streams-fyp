@@ -14,6 +14,7 @@
 // baseline operating points.
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -31,9 +32,16 @@ inline const std::vector<std::string> kOurs{"greedy-stabbing-shared", "greedy-st
                                             "greedy-stabbing-naive-paper",
                                             "greedy-stabbing-naive-paper-boundary"};
 
+// The implementation of ours named `ours`, one of kOurs, with params {"delta", "eps"}.
+[[nodiscard]] std::unique_ptr<simplify::Simplifier<2>> make_ours(const std::string& ours,
+                                                                 const simplify::Params& params);
+
 struct Match {
   std::string ours;      // which implementation, one of kOurs
   json::Value baseline;  // its frechet-distances document
+  // d* / (1 + eps), within d* by the guarantee; or with `unscaled` d* itself, within
+  // (1 + eps) d* and its size bound against kappa(d*) rather than kappa(d* / (1 + eps)).
+  bool unscaled = false;
   double delta = 0.0;
   simplify::Curve<2> simplified;
   Measurement measured;
@@ -43,7 +51,7 @@ struct Match {
 
 [[nodiscard]] Match match(const frechet::Frechet<2>& computer, const std::string& ours,
                           const simplify::Curve<2>& input, json::Value baseline, double eps,
-                          double relative_tol, bool validate);
+                          double relative_tol, bool validate, bool unscaled);
 
 // {"checked", "failed", "checks": {<name>: {"checked", "failed"}}}
 [[nodiscard]] json::Value validation_to_json(const validate::Stats& stats);
@@ -59,6 +67,7 @@ struct Match {
 // one file per trajectory rather than every result. Validation counts are summed over them.
 [[nodiscard]] json::Value summary_to_json(const io::Document& input, const std::string& dataset,
                                           const std::string& source, const std::string& ours,
-                                          double eps, const std::vector<Match>& matches);
+                                          double eps, bool unscaled,
+                                          const std::vector<Match>& matches);
 
 }  // namespace ssk::pipelines

@@ -1,7 +1,9 @@
 # From zero to Fréchet distances
 
-Every step from a fresh clone to a measured error for every simplification, and to ours run at
-each of those errors. **Each step gives the PowerShell and the POSIX shell form**, since the
+Every step from a fresh clone to a measured error for every simplification, to ours run at
+each of those errors (step 7), to both sides held to the same fixed errors (step 8), and to
+both again with ours run at the error itself rather than inside it (steps 9 and 10).
+**Each step gives the PowerShell and the POSIX shell form**, since the
 project is developed on Windows but nothing in it is Windows-only — see *Portability* at the
 end for what actually differs.
 
@@ -13,17 +15,25 @@ them are measured in hours.
 ## 0. Starting over
 
 No stage clears the directory it writes into, so a rerun onto an old tree mixes the two. Remove
-what you are about to regenerate. `data/error-matched` also holds the reports step 8 wrote and
-the shard logs; move those out first if you want them.
+what you are about to regenerate. `data/error-matched` and `data/target-matched` also hold the
+reports step 11 wrote and the shard logs; move those out first if you want them.
 
 ```powershell
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue `
-  data\simplified-trajectories, data\frechet-distances, data\error-matched
+  data\simplified-trajectories, data\frechet-distances, data\error-matched, `
+  data\target-simplified, data\target-matched, data\error-matched-unscaled, `
+  data\target-matched-unscaled, data\ratio-buckets.json, data\plots
 ```
 
 ```sh
-rm -rf data/simplified-trajectories data/frechet-distances data/error-matched
+rm -rf data/simplified-trajectories data/frechet-distances data/error-matched \
+  data/target-simplified data/target-matched data/error-matched-unscaled \
+  data/target-matched-unscaled data/ratio-buckets.json data/plots
 ```
+
+**Let a delete finish before anything writes.** Step 7's tree alone is 4.5 million files and
+takes over 10 minutes to remove; a run started meanwhile writes into a directory the delete has
+not reached yet, and loses what it wrote.
 
 Steps 3 and 4 only need repeating if `data/downloads` or `data/trajectories` is gone or the
 export format changed; to redo step 4, empty each `data/trajectories/<dataset>` first. A
@@ -459,8 +469,38 @@ convex-shadow mot-dancetrack eps=0.5: 87 trajectories -> 1553 matches over 13372
 ```
 
 On a resume it adds `N already done, skipped`. A run that breaks the bound adds
-`K over (1+eps)*delta -- a broken guarantee, look at these`. That line has never appeared, and
-if it does, it is a bug.
+`K over (1+eps)*delta -- a broken guarantee, look at these`. If it does, it is a bug. It
+appeared once, on 2026-11-24, at ε = 0.5: 11 of 857 456 matches, in two Mopsi and three MOT20
+trajectories, up to twice the bound. `geometry::closest` returned the query point as inside a
+shadow that had shrunk to a sliver far from it; fixed the same day, with a regression test in
+`tests/test_greedy_stabbing.cpp`. A resumed run rewrites the logs of the shards it skips, so
+check the result documents (`within_bound` in each summary) as well as the logs.
+
+**The precision floor.** A baseline whose error d* equals its measurement tolerance has error 0
+within measurement: on Mopsi and NGSIM a budget can drop exact repeats, and on NGSIM runs of
+fixes collinear to the bit, at no error at all. Ours is then asked for δ = d*/(1+ε) (step 7)
+or d* (step 9): a few ulps of the coordinates. `GreedyStabber::run` aims inside δ by what its
+arithmetic can err. It computes relative to the first vertex, erring by ulps of the extent, and
+only writing a point back rounds by half an ulp of the absolute coordinates, so the margin is
+`DBL_EPSILON · (max|coord| + 2δ) + 64 · DBL_EPSILON · extent`: 1.4·10⁻⁹ ft on NGSIM,
+1.4·10⁻¹⁴ degrees on Mopsi. At or under it no new point can be written within δ, and `run`
+drops the exact repeats, which is exact, and keeps every other point.
+
+Fixed twice on 2026-11-24:
+
+- Under the margin `run` returned the input whole, repeats and all: 55 pairs in 13
+  trajectories over Theorem 3's size bound. Now it drops the repeats.
+- The margin was 16 · DBL_EPSILON · max|coord|, all of it charged to the absolute coordinates:
+  2.3·10⁻⁸ ft on NGSIM, 25 ulps. Step 9 then found ngsim-002153, whose DPn drops runs
+  collinear to the bit at error 0; ours at δ = 3.4·10⁻⁹ ft fell back and kept 170 vertices
+  against 2 · 61 − 2. With the margin split, ours stabs those runs (regression test in
+  `tests/test_greedy_stabbing.cpp`).
+
+What is left under the floor: 98 pairs per ε in step 7 and in step 9 (168–208 and 164 under the
+old margin), all in 7 trajectories that barely move, with extents of 0.03–0.9 ft on NGSIM
+Lankershim and 7·10⁻⁶ degrees on GeoLife. Every baseline's error there is 0 within
+measurement; ours keeps their 3 to 7 distinct points and is within both bounds. Steps 8 and
+10's targets never come near the floor.
 
 **Cost, measured on `mot-dancetrack`** (692 trajectories, 12 335 baseline documents; 8
 processes on 8 cores):
@@ -480,7 +520,7 @@ document plus one summary per trajectory.
 
 **Validating.** Add `--validate` to the argument list to have the algorithm's invariants
 checked as it runs, at 2–3.5× the time. Each shard's log then ends with a count per check,
-and step 8's script prints them pooled. What is checked is in [algorithm.md](algorithm.md) §8.
+and step 11's script prints them pooled. What is checked is in [algorithm.md](algorithm.md) §8.
 Every `failed` count should be 0.
 
 **Resuming.** The summary is written last, so a trajectory that has one is finished. Rerunning
@@ -491,7 +531,7 @@ the trajectory each shard was on. The shard count may change between runs.
 
 - **Summaries:** each implementation at each ε has one per trajectory in the dataset.
 - **Logs:** no `over (1+eps)*delta` line.
-- **Coverage:** in step 8's coverage table, each `<ours> eps=E` cell is the sum of the four
+- **Coverage:** in step 11's coverage table, each `<ours> eps=E` cell is the sum of the four
   baselines in its row.
 
 ```powershell
@@ -506,7 +546,216 @@ grep "over (1+eps)" data/error-matched/*.log
 
 The first prints the trajectory count (692 for `mot-dancetrack`); the second prints nothing.
 
-## 8. Read the results
+## 8. Fix the error: each baseline's best compression, and ours, within the same target
+
+Step 7 fixes a compression rate and asks how small ours gets at the baseline's error. This is
+the other protocol of [comparison.md](comparison.md), *fix error, compare compression*: fix
+an error target T, give every baseline the fewest vertices it can find within T, and run ours
+within the same T.
+
+**The targets** are T = f · the trajectory's bounding-box diagonal, for
+f ∈ {0.0003, 0.001, 0.003, 0.01, 0.03}. The diagonal makes a level mean the same in degrees,
+feet and pixels. The five fractions are half a decade apart and span the medians of step 6's
+d*/diagonal at m2…m6 (8·10⁻⁴ to 2.5·10⁻², all four baselines pooled), so the levels play the
+part the rates play in step 7. A trajectory with no extent, 1.3% of a sample, has no targets.
+
+**A baseline at a target** is the fewest vertices its knob was found to give within T, each
+step decided exactly by `Frechet::within`. DPn and SQUISH bisect on their budget, SQUISH-E on
+a budget k run as `cmp_ratio = ⌈(N − 1)/k⌉`, DOTS on log(`lssd_threshold`). The budget's
+midpoint is geometric, because a decision costs N·k and the targets sit at large compression.
+The five targets are solved smallest first, and each answer brackets the next, as it is within
+every larger target. **None of these is guaranteed monotone** — a kept vertex forces the
+matching through it, so fewer vertices can be closer — so the bisection stops at a boundary:
+the size is the fewest found, not proven the fewest. Where no setting tried is within T, the
+baseline gets the input itself (`"input": true`), compression 1. The tight levels do this on
+noisy traces: SQUISH-E cannot drop even one point of a fast wiggle without breaking f = 0.0003.
+
+**Ours at a target** runs at `delta = T/(1 + ε)`, so it is within T by its guarantee, and is
+checked exactly. It does not depend on the baseline, so it runs once per level, not once per
+pair.
+
+Two passes, like steps 5–7: `ssk_target_search` is the expensive one and runs once;
+`ssk_target_match` is ours per ε, cheap to repeat after a change to ours. The search needs
+only step 4's trajectories; the match needs the search.
+
+```powershell
+$procs = foreach ($ds in (Get-ChildItem data\trajectories -Directory).Name) {
+  0..7 | ForEach-Object {
+    Start-Process .\build\src\pipelines\target-match\ssk_target_search.exe -NoNewWindow -PassThru `
+      -ArgumentList "--in data\trajectories\$ds --shard $_ --shards 8 --skip-existing"
+  }
+}
+$procs | Wait-Process
+```
+
+```sh
+for ds in data/trajectories/*/; do
+  seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/target-match/ssk_target_search \
+    --in "$ds" --shard {} --shards 8 --skip-existing
+done
+```
+
+**Trajectories over 30 000 points are searched without DOTS**: taken out first, given their
+own `--no-dots` pass, and put back. That is 31 trajectories, 0.06% of the corpus, all GeoLife
+and Mopsi, `geolife-013552` among them. DOTS' search costs about 3 minutes at 30 669 points,
+over 4 at 45 993, and more than 7 at geolife-001523's 92 645, where one DOTS run that
+collapses the curve to 6 points took 900 s. Below 30 000 it stays: 6 s at 9 981 points, 31 s at
+19 960. Their other three baselines take at most a couple of minutes.
+
+Length is a proxy, not the cause, and it missed one: **mopsi-003388** (27 774 points) ran DOTS'
+search for over 7 minutes without finishing, where its other three baselines took 10.5 s. It
+was given the same `--no-dots` pass, so 32 trajectories have no DOTS result in step 8. If
+another shard stalls on DOTS, find its trajectory (the shard's next file without a summary),
+kill the shard, and do the same: the rest of the shard resumes with `--skip-existing`.
+
+```powershell
+foreach ($ds in "geolife", "mopsi") {
+  New-Item -ItemType Directory -Force tmp\$ds | Out-Null
+  (Get-Content data\trajectories\$ds\index.json -Raw | ConvertFrom-Json).trajectories |
+    Where-Object { $_.points -gt 30000 } |
+    ForEach-Object { Move-Item data\trajectories\$ds\$($_.file) tmp\$ds\ }
+}
+# ... the search above ...
+foreach ($ds in "geolife", "mopsi") {
+  .\build\src\pipelines\target-match\ssk_target_search.exe --in tmp\$ds --no-dots --skip-existing
+  Move-Item tmp\$ds\*.json data\trajectories\$ds\
+}
+Remove-Item -Recurse tmp
+```
+
+```sh
+for ds in geolife mopsi; do
+  mkdir -p tmp/$ds
+  python3 -c "import json,sys; [print(t['file']) for t in json.load(open(sys.argv[1]))['trajectories'] if t['points'] > 30000]" \
+    data/trajectories/$ds/index.json | while read f; do mv data/trajectories/$ds/$f tmp/$ds/; done
+done
+# ... the search above ...
+for ds in geolife mopsi; do
+  ./build/src/pipelines/target-match/ssk_target_search --in tmp/$ds --no-dots --skip-existing
+  mv tmp/$ds/*.json data/trajectories/$ds/
+done
+rm -r tmp
+```
+
+Step 11's tables then count 32 fewer pairs for DOTS than for the other three at each level.
+
+Then ours, one ε at a time:
+
+```powershell
+$ours = "greedy-stabbing-shared"
+foreach ($eps in "0.5", "0.3", "0.2", "0.1", "0.05") {
+  $procs = foreach ($ds in (Get-ChildItem data\trajectories -Directory).Name) {
+    0..7 | ForEach-Object {
+      Start-Process .\build\src\pipelines\target-match\ssk_target_match.exe -NoNewWindow -PassThru `
+        -ArgumentList "--in data\trajectories\$ds --ours $ours --eps $eps --shard $_ --shards 8 --skip-existing" `
+        -RedirectStandardOutput "data\target-matched\$ours-$ds-eps$eps-shard$_.log"
+    }
+  }
+  $procs | Wait-Process
+}
+```
+
+```sh
+ours=greedy-stabbing-shared
+mkdir -p data/target-matched
+for eps in 0.5 0.3 0.2 0.1 0.05; do
+  for ds in data/trajectories/*/; do
+    seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/target-match/ssk_target_match \
+      --in "$ds" --ours $ours --eps $eps --shard {} --shards 8 --skip-existing
+  done
+done 2>&1 | tee -a data/target-matched/$ours.log
+```
+
+The PowerShell form needs `data\target-matched` to exist first (`New-Item -ItemType Directory
+-Force data\target-matched`).
+
+**What it writes:**
+
+| path | what |
+|---|---|
+| `data/target-simplified/<algorithm>/<dataset>/f<fraction>/<name>.json` | a baseline's best within the target: its points, `params` (the knob), `stats` (`output_size`, `algorithm_runs`, `input`), `target` and its measured `frechet` |
+| `data/target-simplified/summary/<dataset>/<name>.json` | the targets and every baseline's result, written last |
+| `data/target-matched/<ours>/eps<E>/results/<dataset>/f<fraction>/<name>.json` | ours at a target |
+| `data/target-matched/<ours>/eps<E>/summary/<dataset>/<name>.json` | ours beside each baseline at each level, the shape of step 7's summary with `level` where it has `m` |
+
+Both passes resume with `--skip-existing`, as the summary is written last.
+
+**Check before reading the results:** each pass has one summary per trajectory; no log has a
+`results dropped` line (a baseline that did not keep a subsequence) or an `over the target`
+line (ours broke its guarantee); and step 11's tables count `n` the same for each baseline at a
+level, short trajectories apart.
+
+## 9 and 10. The same, with ours at δ = the error
+
+Steps 7 and 8 run ours at δ = error/(1 + ε), so that it is within the baseline's error. Theorem
+3's size bound is then against κ(error/(1 + ε)), the optimum at a stricter error than the
+baseline is held to, not against κ(error). Ours is bicriteria — run at δ, within (1 + ε)δ and
+at most 2κ(δ) − 2 vertices — so no setting puts both at the baseline's error. Steps 9 and 10
+take the other side of that choice: ours at **δ = d\*** (step 9) and **δ = T** (step 10), its
+size bound against κ of the baseline's own error, and its error allowed up to (1 + ε) times
+the baseline's. Wherever the baseline's error is within δ, which is every pair here, its own
+size bounds κ, so Theorem 3 reads directly: **ours ≤ 2 · the baseline's size − 2**. Ours uses
+its whole bound (a median 1.00 of it in step 8), so it really does take the extra error: read
+these steps for what the size guarantee does, and steps 7–8 for who is smaller at the same
+error.
+
+Both are steps 7 and 8's drivers with `--unscaled-delta`, which also moves their output to
+`data/error-matched-unscaled` and `data/target-matched-unscaled`. They read what steps 6 and
+8 read, and nothing of steps 7 or 8's output.
+
+```powershell
+$ours = "greedy-stabbing-shared"
+New-Item -ItemType Directory -Force data\error-matched-unscaled, data\target-matched-unscaled | Out-Null
+foreach ($eps in "0.5", "0.3", "0.2", "0.1", "0.05") {
+  $procs = foreach ($ds in (Get-ChildItem data\trajectories -Directory).Name) {
+    0..7 | ForEach-Object {
+      Start-Process .\build\src\pipelines\target-match\ssk_target_match.exe -NoNewWindow -PassThru `
+        -ArgumentList "--in data\trajectories\$ds --ours $ours --eps $eps --unscaled-delta --shard $_ --shards 8 --skip-existing" `
+        -RedirectStandardOutput "data\target-matched-unscaled\$ours-$ds-eps$eps-shard$_.log"
+    }
+  }
+  $procs | Wait-Process
+}
+foreach ($eps in "0.5", "0.3", "0.2", "0.1", "0.05") {
+  $procs = foreach ($ds in (Get-ChildItem data\trajectories -Directory).Name) {
+    0..7 | ForEach-Object {
+      Start-Process .\build\src\pipelines\error-match\ssk_match.exe -NoNewWindow -PassThru `
+        -ArgumentList "--in data\trajectories\$ds --ours $ours --eps $eps --unscaled-delta --shard $_ --shards 8 --skip-existing" `
+        -RedirectStandardOutput "data\error-matched-unscaled\$ours-$ds-eps$eps-shard$_.log"
+    }
+  }
+  $procs | Wait-Process
+}
+```
+
+```sh
+ours=greedy-stabbing-shared
+mkdir -p data/error-matched-unscaled data/target-matched-unscaled
+for eps in 0.5 0.3 0.2 0.1 0.05; do
+  for ds in data/trajectories/*/; do
+    seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/target-match/ssk_target_match \
+      --in "$ds" --ours $ours --eps $eps --unscaled-delta --shard {} --shards 8 --skip-existing
+  done
+done 2>&1 | tee -a data/target-matched-unscaled/$ours.log
+for eps in 0.5 0.3 0.2 0.1 0.05; do
+  for ds in data/trajectories/*/; do
+    seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/error-match/ssk_match \
+      --in "$ds" --ours $ours --eps $eps --unscaled-delta --shard {} --shards 8 --skip-existing
+  done
+done 2>&1 | tee -a data/error-matched-unscaled/$ours.log
+```
+
+Step 10 costs what step 8's ours pass does, step 9 what step 7 does. Measured on the corpus with
+24 processes on 24 cores (2026-11-24): step 10 took 1.3 min per ε at 0.5 to 2.1 at 0.05, step
+9 4.6 to 8.9 min. Every result document and summary carries `"delta_rule"`: `d*/(1+eps)` or `d*`
+for steps 7 and 9, `T/(1+eps)` or `T` for 8 and 10; step 11 labels each tree by it.
+
+**Check:** one summary per trajectory per ε; no `over (1+eps)*delta` line. Step 10's logs say
+`N over the target, which delta = T allows` — that is the point of the step, not a fault (89% of
+its runs). In step 11, `over 2kappa-2` must be 0 for both: here it tests ours against twice the
+baseline, in every pair. On the corpus it is 0 in all 9 041 580 pairs of steps 9 and 10.
+
+## 11. Read the results
 
 Everything needed for a table is in the `frechet-distances` tree. A rate-by-algorithm summary
 is a short script over it, and this one is the same on both platforms:
@@ -564,6 +813,68 @@ two columns agree.
 
 The `mot-dancetrack` results, bucketed by size ratio, are in
 `archive/[2026-10-21] Meeting Material - Benchmark data.md`.
+
+Step 9's tree has step 7's shape, so the same script reads it; its Theorem 3 table is the size
+bound against κ(d*):
+
+```powershell
+python scripts\comparison_stats.py --matched data\error-matched-unscaled | Out-File -Encoding utf8 data\error-matched-unscaled\comparison.md
+```
+
+```sh
+python scripts/comparison_stats.py --matched data/error-matched-unscaled > data/error-matched-unscaled/comparison.md
+```
+
+### Pair by pair, in buckets: all four comparisons
+
+`scripts/ratio_buckets.py` reads the summaries of steps 7–10 and, for every pair, takes two
+ratios of ours to the baseline, in percent:
+
+- **size**: ours' vertices over the baseline's. Under 100, ours is smaller.
+- **distance**: ours' measured Fréchet distance over the baseline's. How much of the error the
+  baseline spent ours spent; in step 7 it cannot pass 100 by much, as ours is held to d*.
+
+Each is counted into the buckets [0, 10), [10, 20), …, [190, 200) and 200+, separately for every
+(algorithm, level, ε): the level is m for steps 7 and 9 (*fixed-rate*,
+*fixed-rate-unscaled*), f for steps 8 and 10 (*fixed-error*, *fixed-error-unscaled*), each tree
+labelled by its summaries' `delta_rule`. A ratio of exactly 100, the same size, falls in
+[100, 110).
+
+It first prints **a check table** per comparison and ε: pairs over ours' bound (1+ε)δ, which
+must be 0; pairs over the baseline's error, 0 in steps 7–8 and nearly all in 9–10; and pairs
+over Theorem 3's size bound 2κ − 2, which must be 0, κ bounded by the input and by every
+baseline of the same summary within δ.
+
+```powershell
+python scripts\ratio_buckets.py | Out-File -Encoding utf8 data\ratio-buckets.md
+```
+
+```sh
+python scripts/ratio_buckets.py > data/ratio-buckets.md
+```
+
+Then the eight tables pooled over datasets — size and distance, for each comparison — with
+each row's `n`, median and share under 100%. `data/ratio-buckets.json` (`--out`) has every
+bucket's count as well as its share, per dataset as well as pooled, and the three check counts.
+
+### Figures
+
+`scripts/plot_results.py` draws every row of those tables as a histogram, 800 of them, and
+eight summary figures that carry the result in fewer pictures: 01–05 for steps 7–8, 06 setting
+them beside 9–10, and 07–08 for 9–10. It is the one script that needs a package, matplotlib,
+which the venv has; seconds on 24 cores.
+
+```powershell
+.\.venv\Scripts\python.exe scripts\plot_results.py [--eps 0.1]
+```
+
+```sh
+.venv/bin/python scripts/plot_results.py [--eps 0.1]
+```
+
+Histograms go to `data/plots/histograms/<comparison>/<size|distance>/<ours>/`, the summary to
+`data/plots/summary/`. What they show, which to present, and what to say alongside them is
+[results.md](results.md).
 
 ---
 

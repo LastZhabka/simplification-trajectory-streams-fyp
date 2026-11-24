@@ -1,0 +1,11 @@
+add_library(ssk_target_lib target.cpp)
+target_link_libraries(ssk_target_lib PUBLIC ssk_measure ssk_match_lib)
+target_include_directories(ssk_target_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(ssk_target_search target_search.cpp)
+target_link_libraries(ssk_target_search PRIVATE ssk_target_lib ssk_corpus)
+
+add_executable(ssk_target_match target_match.cpp)
+target_link_libraries(ssk_target_match PRIVATE ssk_target_lib ssk_corpus)
+
+ssk_pipeline_warnings(ssk_target_lib ssk_target_search ssk_target_match)

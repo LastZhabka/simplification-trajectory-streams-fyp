@@ -18,6 +18,10 @@
 // --validate checks the algorithm's invariants as it runs (src/algo/validate) and puts the
 // counts in every result, in the summary and in the closing lines. It is off by default
 // because it costs time.
+//
+// --unscaled-delta runs ours at delta = d* instead of d* / (1 + eps): within (1 + eps) d*, so
+// with more error than the baseline, and with its size bound against kappa(d*). It is step 9
+// of docs/running.md, and writes under data/error-matched-unscaled unless --out says else.
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -39,7 +43,7 @@ struct Options {
   std::string in;
   std::string ours = pipelines::kOurs.front();
   std::string distances = "data/frechet-distances";
-  std::string out = "data/error-matched";
+  std::string out;
   double eps = 0.0;
   double relative_tol = 1e-9;
   pipelines::Rates rates;
@@ -48,13 +52,14 @@ struct Options {
   int shards = 1;
   bool skip_existing = false;
   bool validate = false;
+  bool unscaled = false;
 };
 
 void usage() {
   std::fprintf(stderr,
                "usage: ssk_match --in DIR --eps E [--ours NAME] [--distances DIR] [--out DIR] "
                "[--tol REL] [--rates A..B] [--limit N] [--shard I --shards N] [--skip-existing] "
-               "[--validate]\n"
+               "[--validate] [--unscaled-delta]\n"
                "  ours:");
   for (const std::string& ours : pipelines::kOurs) {
     std::fprintf(stderr, " %s", ours.c_str());
@@ -96,9 +101,14 @@ Options parse_args(int argc, char** argv) {
       opt.skip_existing = true;
     } else if (arg == "--validate") {
       opt.validate = true;
+    } else if (arg == "--unscaled-delta") {
+      opt.unscaled = true;
     } else {
       usage();
     }
+  }
+  if (opt.out.empty()) {
+    opt.out = opt.unscaled ? "data/error-matched-unscaled" : "data/error-matched";
   }
   if (opt.in.empty() || opt.eps <= 0.0 ||
       std::find(pipelines::kOurs.begin(), pipelines::kOurs.end(), opt.ours) ==
@@ -145,7 +155,7 @@ int main(int argc, char** argv) {
         }
         const pipelines::Match& match = matches.emplace_back(pipelines::match(
             computer, opt.ours, curve, json::parse_file(from.string()), opt.eps,
-            opt.relative_tol, opt.validate));
+            opt.relative_tol, opt.validate, opt.unscaled));
         pipelines::write_document(root / algorithm / dataset / rate / name,
                        pipelines::match_to_json(input, dataset, source, opt.eps, match));
 
@@ -158,7 +168,8 @@ int main(int argc, char** argv) {
     }
     pipelines::write_document(
         summary,
-        pipelines::summary_to_json(input, dataset, source, opt.ours, opt.eps, matches));
+        pipelines::summary_to_json(input, dataset, source, opt.ours, opt.eps, opt.unscaled,
+                                   matches));
     matched += matches.size();
   }
 

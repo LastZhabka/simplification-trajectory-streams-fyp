@@ -17,6 +17,18 @@ const json::Value& field(const json::Value& doc, const char* key) {
   return *value;
 }
 
+json::Value frechet_to_json(const Match& match, double eps) {
+  return json::Object{
+      {"distance", json::Value(match.measured.distance)},
+      {"tolerance", json::Value(match.measured.tolerance)},
+      {"bound", json::Value((1.0 + eps) * match.delta)},
+      {"within_bound", json::Value(match.within_bound)},
+      {"computer", json::Value("dv-gis-cup-2017")},
+  };
+}
+
+}  // namespace
+
 std::unique_ptr<simplify::Simplifier<2>> make_ours(const std::string& ours,
                                                    const simplify::Params& params) {
   if (ours == "greedy-stabbing-shared") {
@@ -33,18 +45,6 @@ std::unique_ptr<simplify::Simplifier<2>> make_ours(const std::string& ours,
   }
   throw std::runtime_error("error-match: no implementation of ours named '" + ours + "'");
 }
-
-json::Value frechet_to_json(const Match& match, double eps) {
-  return json::Object{
-      {"distance", json::Value(match.measured.distance)},
-      {"tolerance", json::Value(match.measured.tolerance)},
-      {"bound", json::Value((1.0 + eps) * match.delta)},
-      {"within_bound", json::Value(match.within_bound)},
-      {"computer", json::Value("dv-gis-cup-2017")},
-  };
-}
-
-}  // namespace
 
 json::Value validation_to_json(const validate::Stats& stats) {
   json::Object checks;
@@ -63,10 +63,12 @@ json::Value validation_to_json(const validate::Stats& stats) {
 
 Match match(const frechet::Frechet<2>& computer, const std::string& ours,
             const simplify::Curve<2>& input, json::Value baseline, double eps,
-            double relative_tol, bool validate) {
+            double relative_tol, bool validate, bool unscaled) {
   Match out;
   out.ours = ours;
-  out.delta = field(field(baseline, "frechet"), "distance").num() / (1.0 + eps);
+  out.unscaled = unscaled;
+  const double error = field(field(baseline, "frechet"), "distance").num();
+  out.delta = unscaled ? error : error / (1.0 + eps);
   // No implementation of ours is watched yet: with --validate the counts are all zero.
   const validate::Validator validator;
   out.simplified = make_ours(ours, {{"delta", out.delta}, {"eps", eps}})->simplify(input);
@@ -102,6 +104,7 @@ json::Value match_to_json(const io::Document& input, const std::string& dataset,
       {"algorithm", json::Value(match.ours)},
       {"mode", json::Value("error-matched")},
       {"params", json::Object{{"delta", json::Value(match.delta)}, {"eps", json::Value(eps)}}},
+      {"delta_rule", json::Value(match.unscaled ? "d*" : "d*/(1+eps)")},
       {"stats", json::Object{{"input_size", json::Value(n)},
                              {"output_size", json::Value(k)},
                              {"compression", json::Value(static_cast<double>(n) /
@@ -122,7 +125,7 @@ json::Value match_to_json(const io::Document& input, const std::string& dataset,
 
 json::Value summary_to_json(const io::Document& input, const std::string& dataset,
                             const std::string& source, const std::string& ours, double eps,
-                            const std::vector<Match>& matches) {
+                            bool unscaled, const std::vector<Match>& matches) {
   json::Array pairs;
   for (const Match& match : matches) {
     const json::Value& stats = field(match.baseline, "stats");
@@ -148,6 +151,7 @@ json::Value summary_to_json(const io::Document& input, const std::string& datase
       {"name", json::Value(input.name)},
       {"ours", json::Value(ours)},
       {"eps", json::Value(eps)},
+      {"delta_rule", json::Value(unscaled ? "d*" : "d*/(1+eps)")},
       {"input_size", json::Value(input.points.size())},
       {"pairs", json::Value(std::move(pairs))},
   };
