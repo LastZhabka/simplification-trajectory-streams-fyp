@@ -47,20 +47,36 @@ class GreedyStabber {
 
 template <class Candidate>
 Curve<2> GreedyStabber<Candidate>::run(const Curve<2>& curve, double delta, double eps) {
-  // Ours reaches exactly (1 + eps) * delta, and writing a point back in the input's coordinates
-  // can round it an ulp of them further, so aim a few ulps inside.
+  // Ours reaches exactly (1 + eps) * delta, so aim inside by what the arithmetic can err. It runs
+  // relative to the first vertex, erring by ulps of the curve's extent; only writing a point back
+  // rounds by half an ulp of its own coordinates, at most scale + 2 * delta. Ulps of the
+  // coordinates for all of it, 16 of them, put NGSIM's floor at 2.3e-8 ft where 1.4e-9 does.
+  const Point<2> origin = curve[0];
   double scale = 0.0;
+  double extent = 0.0;
   for (const Point<2>& q : curve) {
     scale = std::max({scale, std::abs(q[0]), std::abs(q[1])});
+    extent = std::max({extent, std::abs(q[0] - origin[0]), std::abs(q[1] - origin[1])});
   }
-  const double inside = delta - 16.0 * std::numeric_limits<double>::epsilon() * scale;
+  const double ulp = std::numeric_limits<double>::epsilon();
+  const double inside = delta - ulp * (scale + 2.0 * delta) - 64.0 * ulp * extent;
   if (inside <= 0.0) {
-    return curve;
+    // Below what the coordinates resolve no new point can be placed within delta, but dropping
+    // a repeat of the point before is exact. Returning the input whole kept every repeat and
+    // broke the size bound on Mopsi's and NGSIM's runs of identical fixes.
+    Curve<2> out;
+    for (const Point<2>& q : curve) {
+      if (out.empty() || out.back() != q) {
+        out.push_back(q);
+      }
+    }
+    if (out.size() == 1) {
+      out.push_back(curve.back());
+    }
+    return out;
   }
   init(inside, eps);
 
-  // Relative to the first vertex, so that coordinates near zero keep more of delta's digits.
-  const Point<2> origin = curve[0];
   std::vector<Vec> vertices;
   for (const Point<2>& q : curve) {
     vertices.push_back({q[0] - origin[0], q[1] - origin[1]});

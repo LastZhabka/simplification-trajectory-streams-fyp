@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <deque>
+#include <limits>
 #include <numbers>
 #include <optional>
 #include <stdexcept>
@@ -178,7 +179,11 @@ Vec closest(const Polygon& poly, Vec q) {
     const Vec ab = poly[(i + 1) % poly.size()] - a;
     const double length = norm(ab);
     const double reach = norm(q - a) + norm(q - a - ab);
-    inside = inside && (length < 1e-9 * reach || cross(ab, q - a) >= 1e-9 * length * reach);
+    // Only an edge a few ulps long is skipped, its direction being noise. Measured against reach
+    // instead, every edge of a sliver far from q was skipped, and q came back as inside it.
+    const double size = norm(a) + norm(a + ab);
+    inside = inside && (length < 64.0 * std::numeric_limits<double>::epsilon() * size ||
+                        cross(ab, q - a) >= 1e-9 * length * reach);
     const double t = length > 0.0 ? std::clamp(dot(q - a, ab) / dot(ab, ab), 0.0, 1.0) : 0.0;
     const Vec on = a + ab * t;
     if (dot(q - on, q - on) < dot(q - best, q - best)) {
