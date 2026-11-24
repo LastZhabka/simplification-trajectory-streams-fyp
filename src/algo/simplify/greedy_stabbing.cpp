@@ -296,12 +296,18 @@ class SharedStabber final : public GreedyStabber<SharedCandidate> {
   }
 
  private:
-  // The starts just after a crossing of the circle with a line n_k . x = strictest_k, where the
-  // sides they are beyond can change. A crossing is found by angle and a side by dot product, which
-  // round differently, so each marks the starts within a quarter spacing of it and the next.
+  // The starts where the sides they are beyond change from the start before: one past each
+  // crossing of the circle with a line n_k . x = strictest_k. The crossing's angle only says where
+  // to look. It rounds differently from the dot product that decides beyond in bounds() and
+  // base(), so that test itself is asked of the starts a spacing either side, and a start is
+  // marked only where its answer differs from the one before. A mark costs a build of Q[p], a
+  // test only a dot product.
   [[nodiscard]] std::vector<bool> crossings(const std::vector<double>& strictest) const {
     const auto count = static_cast<long long>(starts_.size());
     const double spacing = 2.0 * std::numbers::pi / static_cast<double>(count);
+    const auto wrap = [count](long long s) {
+      return static_cast<std::size_t>((s % count + count) % count);
+    };
     std::vector<bool> marked(starts_.size(), false);
     for (std::size_t k = 0; k < strictest.size(); ++k) {
       const Vec n = region_.normals[k];
@@ -309,12 +315,19 @@ class SharedStabber final : public GreedyStabber<SharedCandidate> {
       if (std::abs(t) > 1.0 + 1e-9) {
         continue;
       }
+      const auto beyond = [&](long long s) {
+        return dot(n, center_ + starts_[wrap(s)]) > strictest[k];
+      };
       const double half = std::acos(std::clamp(t, -1.0, 1.0));
       for (const double angle : {std::atan2(n.y, n.x) - half, std::atan2(n.y, n.x) + half}) {
-        const auto first = static_cast<long long>(std::ceil(angle / spacing - 0.25));
-        const auto last = static_cast<long long>(std::floor(angle / spacing + 0.25)) + 1;
-        for (long long s = first; s <= last; ++s) {
-          marked[static_cast<std::size_t>((s % count + count) % count)] = true;
+        const auto first = static_cast<long long>(std::floor(angle / spacing)) - 1;
+        bool before = beyond(first - 1);
+        for (long long s = first; s <= first + 3; ++s) {
+          const bool here = beyond(s);
+          if (here != before) {
+            marked[wrap(s)] = true;
+          }
+          before = here;
         }
       }
     }

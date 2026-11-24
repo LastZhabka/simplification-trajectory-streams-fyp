@@ -124,6 +124,46 @@ This run predates the fix to `geometry::closest` of 2026-11-24 (`docs/running.md
 fix changes only which point of a shadow is emitted, once per output segment; on these 1 470
 cases it changes 3 outputs' coordinates and no vertex count, so the timings stand.
 
+It also predates the shared stabber's exact marking of 2026-11-24
+([convex-shadow-32.md](convex-shadow-32.md) §11, step 2), which makes shared faster and leaves
+the other three as they were. So shared's columns below are its old times, and its speedups
+are 1.1–1.2× low.
+
+#### Shared, before and after the exact marking
+
+The same 1 470 cells, shared only, both builds interleaved in one shuffled queue at 8 jobs.
+Each cell gets its best of 3 rounds, each round being `ssk_bench`'s own best of up to 5:
+
+| ε | before | after | summed time | median cell | ns / vertex |
+|---|---:|---:|---:|---:|---:|
+| 0.5 | 0.854 s | 0.775 s | −9.2% | −6.5% | 1 073 → 975 |
+| 0.25 | 1.150 s | 1.014 s | −11.8% | −7.3% | 1 445 → 1 275 |
+| 0.2 | 1.342 s | 1.159 s | −13.6% | −9.7% | 1 686 → 1 456 |
+| 0.1 | 2.054 s | 1.741 s | −15.2% | −11.7% | 2 581 → 2 188 |
+| 0.05 | 3.132 s | 2.608 s | −16.7% | −13.1% | 3 936 → 3 277 |
+
+**Outputs identical to the bit in all 1 470.** A throwaway build that, at every vertex, also
+computed every start's sides by brute force counted the following per vertex:
+
+| ε | starts alive | changes | marks before | marks after | builds before | builds after | needed |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 0.5 | 11.1 | 1.33 | 1.84 | 1.33 | 2.43 | 2.02 | 1.99 |
+| 0.25 | 21.2 | 2.06 | 2.93 | 2.06 | 3.13 | 2.51 | 2.47 |
+| 0.2 | 25.9 | 2.40 | 3.40 | 2.40 | 3.43 | 2.71 | 2.68 |
+| 0.1 | 49.8 | 3.66 | 5.23 | 3.66 | 4.70 | 3.59 | 3.54 |
+| 0.05 | 98.3 | 5.35 | 7.76 | 5.35 | 6.39 | 4.71 | 4.66 |
+
+How to read it:
+
+- A *change* is a start whose sides differ from the start before's.
+- *Needed* counts the builds where the survivor's sides differ from those of the last build,
+  plus the first build of each vertex.
+- After the change the marks are exactly the changes. Before it, 28–31% of the marks were
+  spurious, and 17–26% of the builds were wasted.
+- Neither marking ever missed a change.
+- What still exceeds *needed*, 0.03–0.05 per vertex, is a side that changes and changes back
+  between two survivors.
+
 ### Time, summed per ε
 
 Best-of seconds summed over the 294 (trajectory, δ) cells:

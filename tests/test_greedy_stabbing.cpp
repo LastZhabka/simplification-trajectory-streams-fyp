@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -81,6 +82,33 @@ TEST("greedy-stabbing/sharing the computations changes nothing") {
         const Params params{{"delta", delta}, {"eps", eps}};
         CHECK(ssk::simplify::GreedyStabbingShared(params).simplify(curve) ==
               ssk::simplify::GreedyStabbingNaive(params).simplify(curve));
+      }
+    }
+  }
+}
+
+// The shared stabber builds Q[p] only at the starts it marks, so a missed mark is an output that
+// differs from the naive one. Lattice walks, also at coordinates in the millions, where the angle
+// that says where to look and the dot product that decides round furthest apart.
+TEST("greedy-stabbing/sharing changes nothing on lattice walks, at any offset") {
+  std::mt19937 rng(7);
+  for (const double offset : {0.0, 6451925.0}) {
+    for (int walk = 0; walk < 6; ++walk) {
+      Curve<2> curve;
+      double x = offset, y = offset / 3.0;
+      for (int i = 0; i < 200; ++i) {
+        curve.push_back({x, y});
+        x += static_cast<double>(static_cast<int>(rng() % 5) - 1);
+        y += static_cast<double>(static_cast<int>(rng() % 5) - 2);
+      }
+      for (const double eps : {0.5, 0.2, 0.1, 0.05}) {
+        for (const double delta : {0.5, 1.0, 2.0, 3.0}) {
+          const Params params{{"delta", delta}, {"eps", eps}};
+          CHECK_MSG(ssk::simplify::GreedyStabbingShared(params).simplify(curve) ==
+                        ssk::simplify::GreedyStabbingNaive(params).simplify(curve),
+                    "walk " + std::to_string(walk) + " at offset " + std::to_string(offset) +
+                        ", eps " + std::to_string(eps) + ", delta " + std::to_string(delta));
+        }
       }
     }
   }

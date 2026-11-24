@@ -420,17 +420,23 @@ shared between starts. Same region, starts and emission; another `GreedyStabber`
 1. `d'_k = min(d_k, b + n_k·v)`.
 2. **Marks.** Each line `n_k·x = d'_k` meets the circle of radius `δ` around `c` in at most two
    points, found by angle: `cos(θ − α_k) = (d'_k − n_k·c)/δ`. Only there can the set of sides a
-   start is beyond, `V[p]`, change. The starts are evenly spaced, so the starts just after a
-   crossing are found by dividing its angle by the spacing, with no sort: each crossing marks
-   the starts within a quarter spacing of it and the next, as an angle and a dot product round
-   differently.
+   start is beyond, `V[p]`, change. The starts are evenly spaced, so where to look is found by
+   dividing the crossing's angle by the spacing, with no sort. What marks a start is the test
+   `Q[p]` is built with, `n_k·p > d'_k`, asked of the starts a spacing either side of the
+   crossing: a start is marked where its answer differs from the start before's. That is at
+   most one per crossing, and none for a line whose two crossings fall between the same two
+   starts. The angle and the dot product round differently, so the angle only says where; the
+   test decides, strict at a start exactly on the line as `Q[p]` is. Until 2026-11-24 each
+   crossing marked every start within a quarter spacing of it and the next instead: 1.4 marks
+   per change on the benchmark's cells, 28–31% of them spurious, 17–26% of builds wasted
+   ([benchmark.md](benchmark.md)).
 3. **Per start**, in order: after a mark, or at the first start, `Q[p]` and its two corners are
    built from `p`, O(m). Until the next mark they are the same, as they depend on `p` only
    through `V[p]`, and each start only forms its two rays from them and cuts its cone, O(1).
 4. With survivors, `d ← d'`; without, the start that survived last emits as in §10, with the
    `d` it reached.
 
-That is O(m) crossings, O(M) marks and starts, and at most 4m + 1 builds of O(m): O(M + m²)
+That is O(m) crossings, O(M) marks and starts, and at most 2m + 1 builds of O(m): O(M + m²)
 per vertex, O(ε⁻¹). The text's sort of the crossings, O(m log m), is not needed.
 
 **Against §10**: every start sees the same `Q[p]` and corners as there, so the output is meant
