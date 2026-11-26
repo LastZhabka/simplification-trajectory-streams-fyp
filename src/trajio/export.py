@@ -10,7 +10,7 @@ Coordinates and timestamps are written as the **source text**, placed directly i
 number slot, so no float round-trip happens between the dataset file and ours. The one
 exception is a value whose text is not legal JSON number syntax (a leading `+` or `.`, a
 leading zero); those are re-rendered through a double, which preserves the value but not the
-spelling.
+spelling. A value that is not finite raises: JSON has no NaN or infinity.
 
 `t` is present only when the source has a clock, and then holds one value per point. What
 those values mean is declared by `t_unit`: `unix_ms` for an absolute epoch, `ms` for
@@ -20,6 +20,7 @@ milliseconds from the start of the sequence.
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 
@@ -36,7 +37,11 @@ def _number(text: str) -> str:
     """The source text if JSON can carry it as-is, else a value-preserving rendering."""
     if _JSON_NUMBER.match(text):
         return text
-    return repr(float(text))  # repr of a double round-trips exactly
+    value = float(text)
+    # repr would write nan or inf, which is not JSON: the file would load nowhere.
+    if not math.isfinite(value):
+        raise ValueError(f"{text!r} is not a finite number, and JSON has no other kind")
+    return repr(value)  # repr of a double round-trips exactly
 
 
 def _write_trajectory(

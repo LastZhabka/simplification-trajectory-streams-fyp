@@ -170,7 +170,8 @@ Coordinates and timestamps are written as the source text, placed straight into 
 number slot, so nothing is re-rendered on the way out. A value whose text is not legal JSON
 number syntax — a leading `+` or `.`, a leading zero — is the one exception: it goes through
 a double, which preserves the value but not the spelling. None of the four datasets produces
-one.
+one. A `nan` or `inf` is refused with a `ValueError`: JSON cannot carry it, and written as
+Python spells it, the file would load nowhere.
 
 Epoch milliseconds survive the round trip through the C++ reader's `double` exactly: 1.2e12
 is far below 2^53.

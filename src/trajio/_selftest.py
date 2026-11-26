@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from . import export, open_source
+from .export import _number
 
 _FAILS: list[str] = []
 
@@ -197,6 +198,18 @@ def check_mot(root: Path, out: Path) -> None:
           "mot: index.json must record the frame rate that was assumed")
 
 
+def check_numbers() -> None:
+    for text, written in [("62.615877", "62.615877"), ("-0", "-0"), ("1e+05", "1e+05"),
+                          ("+1.5", "1.5"), (".5", "0.5"), ("007", "7.0"), (" 3 ", "3.0")]:
+        check(_number(text) == written, f"numbers: {text!r} written as {_number(text)!r}")
+    for text in ["nan", "NaN", "inf", "-Infinity"]:
+        try:
+            written = _number(text)
+        except ValueError:
+            continue
+        check(False, f"numbers: {text!r} written as {written!r}, which is not JSON")
+
+
 def check_index(out: Path) -> None:
     idx = _read(out / "index.json")
     check({"dataset", "count", "trajectories"} <= set(idx), f"index: keys {sorted(idx)}")
@@ -221,6 +234,9 @@ def run() -> int:
             except Exception as exc:
                 _FAILS.append(f"{name}: raised {type(exc).__name__}: {exc}")
             print(f"  {name:8s} {'ok' if len(_FAILS) == before else 'FAILED'}")
+        before = len(_FAILS)
+        check_numbers()
+        print(f"  numbers  {'ok' if len(_FAILS) == before else 'FAILED'}")
         try:
             check_index(base / "out" / "mopsi")
             print("  index    ok")
