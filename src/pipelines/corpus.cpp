@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
+#include <stdexcept>
+#include <string>
 
 namespace fs = std::filesystem;
 
@@ -25,6 +27,10 @@ std::string dataset_of(const std::string& dir) {
 }
 
 std::vector<fs::path> trajectory_files(const std::string& dir, int limit, int shard, int shards) {
+  if (shards < 1 || shard < 0 || shard >= shards) {
+    throw std::runtime_error("corpus: --shard " + std::to_string(shard) + " --shards " +
+                             std::to_string(shards) + ": need 0 <= shard < shards");
+  }
   std::vector<fs::path> files;
   for (const auto& entry : fs::directory_iterator(dir)) {
     if (entry.path().extension() == ".json" && entry.path().filename() != "index.json") {
@@ -51,6 +57,10 @@ void write_document(const fs::path& path, const json::Value& doc) {
     std::ofstream out(part);
     doc.write(out);
     out << '\n';
+    out.close();
+    if (!out) {
+      throw std::runtime_error("corpus: could not write '" + part.string() + "'");
+    }
   }
   fs::rename(part, path);
 }

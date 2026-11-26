@@ -9,6 +9,7 @@ add_executable(ssk_tests
   test_measure.cpp
   test_greedy_stabbing.cpp
   test_bench.cpp
+  test_corpus.cpp
   test_target.cpp
 )
 target_link_libraries(ssk_tests PRIVATE ssk ssk_sweep ssk_measure ssk_bench_lib
