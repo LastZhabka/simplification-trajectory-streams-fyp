@@ -3,9 +3,13 @@ of trajectories at a fixed selection of deltas, for each eps.
 
     python scripts/benchmark.py [--eps 0.5,0.25,0.2,0.1,0.05] [--time-limit 300] [--jobs 8]
                                 [--per-dataset 10] [--out data/benchmark/benchmark.json]
+                                [--ours NAME,NAME --reuse OLD/benchmark.json] [--resume]
 
 Each cell -- one trajectory, delta, eps and implementation -- is one ssk_bench process, killed
-at --time-limit seconds and then recorded as time_limit_exceeded. Writes, beside --out:
+at --time-limit seconds and then recorded as time_limit_exceeded. --ours runs only the
+implementations named, and takes every other one's cells from --reuse, a finished benchmark of
+the same selection, eps and time limit, so the tables still cover them all. --resume keeps the
+cells a stopped run of the same command left in --out and runs only the rest. Writes, beside --out:
 
   benchmark.json         every cell, the selection and the settings
   times/<ours>.json      every time of one implementation, grouped by trajectory
@@ -29,11 +33,20 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from statistics import median
 
 OURS = ("greedy-stabbing-shared", "greedy-stabbing-naive",
-        "greedy-stabbing-naive-paper-boundary", "greedy-stabbing-naive-paper")
+        "greedy-stabbing-naive-paper-boundary", "greedy-stabbing-naive-paper",
+        "greedy-stabbing-no-decomp", "greedy-stabbing-no-decomp-paper-boundary",
+        "greedy-stabbing-no-decomp-paper")
 SHORT = {"greedy-stabbing-shared": "shared", "greedy-stabbing-naive": "naive",
          "greedy-stabbing-naive-paper-boundary": "paper-boundary",
-         "greedy-stabbing-naive-paper": "paper"}
+         "greedy-stabbing-naive-paper": "paper",
+         "greedy-stabbing-no-decomp": "no-decomp",
+         "greedy-stabbing-no-decomp-paper-boundary": "no-decomp-paper-boundary",
+         "greedy-stabbing-no-decomp-paper": "no-decomp-paper"}
 SHARED = OURS[0]
+# Each no-decomp stabber has the region and starts of a naive one, which it should agree with.
+TWIN = {"greedy-stabbing-no-decomp": "greedy-stabbing-naive",
+        "greedy-stabbing-no-decomp-paper-boundary": "greedy-stabbing-naive-paper-boundary",
+        "greedy-stabbing-no-decomp-paper": "greedy-stabbing-naive-paper"}
 # Below this the shared stabber takes microseconds, which measures the timer.
 MIN_POINTS = 500
 # The long tail, beside the sample: the largest trajectory, and the one at the 99th percentile.
@@ -239,6 +252,12 @@ def report(cells, limit, eps_list):
     same = sum(g[OURS[0]]["digest"] == g[OURS[1]]["digest"] for g in agree)
     lines.append(f"\nshared and naive output identical to the bit in {same} of {len(agree)} "
                  "cells where both finished.")
+    for o, twin in TWIN.items():
+        agree = [g for g in by.values() if g[o]["status"] == "ok" and g[twin]["status"] == "ok"]
+        size = sum(g[o]["output_size"] == g[twin]["output_size"] for g in agree)
+        same = sum(g[o]["digest"] == g[twin]["digest"] for g in agree)
+        lines.append(f"{SHORT[o]} against {SHORT[twin]}, of {len(agree)} cells where both "
+                     f"finished: the same output size in {size}, identical to the bit in {same}.")
     return "\n".join(lines)
 
 
@@ -359,26 +378,74 @@ def main():
     ap.add_argument("--trajectories", default="data/trajectories")
     ap.add_argument("--distances", default="data/frechet-distances")
     ap.add_argument("--out", default="data/benchmark/benchmark.json")
+    ap.add_argument("--ours", default=",".join(OURS))
+    ap.add_argument("--reuse")
+    ap.add_argument("--resume", action="store_true")
     args = ap.parse_args()
 
     exe = shutil.which(EXE)
     if exe is None:
         raise SystemExit(f"no {EXE}: build first (docs/running.md step 2)")
     eps_list = [float(e) for e in args.eps.split(",")]
+    ours = args.ours.split(",")
+    if not set(ours) <= set(OURS):
+        raise SystemExit(f"--ours: not ours: {sorted(set(ours) - set(OURS))}")
     selection = select(args.trajectories, args.distances, args.per_dataset)
     print(f"{len(selection)} trajectories, {sum(t['points'] for t in selection):,} points",
           flush=True)
+    reused = []
+    if args.reuse:
+        old = read_json(args.reuse)
+        if (old["selection"] != selection or old["settings"]["eps"] != eps_list
+                or old["settings"]["time_limit"] != args.time_limit
+                or len(old["cells"]) != old["cells_total"]):
+            raise SystemExit(f"--reuse: {args.reuse} is not a finished benchmark of this "
+                             "selection, eps and time limit")
+        reused = [c for c in old["cells"] if c["ours"] not in ours]
+    missing = set(OURS) - set(ours) - {c["ours"] for c in reused}
+    if missing:
+        raise SystemExit(f"no cells of {sorted(missing)}: run them, or --reuse a benchmark "
+                         "that has them")
 
     cells = [{"dataset": t["dataset"], "file": t["file"], "rule": t["rule"],
               "points": t["points"], "path": t["path"], "rate": rate, "delta": delta,
-              "eps": eps, "ours": ours}
+              "eps": eps, "ours": o}
              for t in selection for rate, delta in t["deltas"].items()
-             for eps in eps_list for ours in OURS]
+             for eps in eps_list for o in ours]
     # Shuffled, so no implementation always runs beside the slow ones or late in a warm machine.
     random.Random(0).shuffle(cells)
 
+    # A run stopped part way leaves a partial --out; with --resume its cells of the implementations
+    # run are kept and only the others run, in the same shuffled order.
+    done, earlier = [], 0.0
+    if args.resume:
+        old = read_json(args.out)
+        if (old["selection"] != selection or old["settings"]["eps"] != eps_list
+                or old["settings"]["time_limit"] != args.time_limit
+                or old["settings"]["ours"] != ours):
+            raise SystemExit(f"--resume: {args.out} is not a run of this selection, eps, time "
+                             "limit and --ours")
+        done = [c for c in old["cells"] if c["ours"] in ours]
+        earlier = old["wall_seconds"]
+        key = lambda c: (c["dataset"], c["file"], c["rate"], c["eps"], c["ours"])
+        finished = {key(c) for c in done}
+        cells = [c for c in cells if key(c) not in finished]
+        print(f"resuming: {len(done)} cells done, {len(cells)} to run", flush=True)
+
+    settings = {"eps": eps_list, "time_limit": args.time_limit, "jobs": args.jobs,
+                "per_dataset": args.per_dataset, "min_points": MIN_POINTS,
+                "rates": list(RATES), "baseline": BASELINE, "ours": ours,
+                "reused": {"from": args.reuse, "ours": sorted({c["ours"] for c in reused})}
+                if args.reuse else None,
+                "resumed": {"cells": len(done)} if args.resume else None,
+                "machine": {"processor": platform.processor(), "cpus": os.cpu_count(),
+                            "system": platform.platform()}}
     started = time.monotonic()
-    results = []
+    results = reused + done
+    checkpoint = lambda: write_json(args.out, {
+        "settings": settings, "selection": selection,
+        "cells_total": len(reused) + len(done) + len(cells),
+        "wall_seconds": earlier + time.monotonic() - started, "cells": results})
     with ThreadPoolExecutor(args.jobs) as pool:
         futures = [pool.submit(run, exe, args.time_limit, c) for c in cells]
         for i, f in enumerate(as_completed(futures), 1):
@@ -386,14 +453,11 @@ def main():
             if i % 1000 == 0 or i == len(cells):
                 print(f"  {i}/{len(cells)} cells, {time.monotonic() - started:.0f} s",
                       flush=True)
-
-    settings = {"eps": eps_list, "time_limit": args.time_limit, "jobs": args.jobs,
-                "per_dataset": args.per_dataset, "min_points": MIN_POINTS,
-                "rates": list(RATES), "baseline": BASELINE,
-                "machine": {"processor": platform.processor(), "cpus": os.cpu_count(),
-                            "system": platform.platform()}}
-    write_json(args.out, {"settings": settings, "selection": selection,
-                          "wall_seconds": time.monotonic() - started, "cells": results})
+            # A long run is hours; what is done is on disk, a partial benchmark.json whose
+            # cells fall short of cells_total, if it is stopped.
+            if i % 1000 == 0:
+                checkpoint()
+    checkpoint()
     print(f"wrote {args.out}")
     for path in write_derived(os.path.dirname(args.out), results, selection, settings):
         print(f"wrote {path}")

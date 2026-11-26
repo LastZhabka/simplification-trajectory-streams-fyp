@@ -35,8 +35,9 @@ python scripts/benchmark.py [--eps 0.5,0.25,0.2,0.1,0.05] [--time-limit 300] [--
                             [--per-dataset 10] [--out data/benchmark/benchmark.json]
 ```
 
-About 25 minutes with the defaults on the machine below. Results are written only at the end.
-Beside `--out` it writes:
+About 25 minutes with the defaults on the machine below. `benchmark.json` is rewritten every
+1 000 cells, so a stopped run leaves the cells it finished, fewer than its `cells_total`, and
+`--resume` goes on from there; the rest is written at the end. Beside `--out` it writes:
 
 | file | what |
 |---|---|
@@ -47,6 +48,29 @@ Beside `--out` it writes:
 
 and prints the tables below as Markdown; redirect it to keep them (`data/benchmark/report.md`
 for the run below).
+
+**Running only some of them.** `--ours` names the implementations to run, comma-separated, and
+`--reuse` a finished `benchmark.json` to take every other one's cells from. The script refuses one
+whose selection, ε or time limit differs, so the same trajectories, δ and ε are timed. Its
+`benchmark.json` and derived files then cover all seven, the reused cells as they were, and
+`settings.reused` names what came from where. **A run stopped part way** goes on from its last
+checkpoint with the same command and `--resume`: the cells of the implementations run that
+`--out` already holds are kept, after the same checks as `--reuse`, and only the others run.
+`settings.resumed` counts the kept cells, and `wall_seconds` adds up both runs. The three
+no-decomp stabbers against the run at 1 007 trajectories, which was resumed once after 10 000
+cells:
+
+```powershell
+python scripts\benchmark.py --per-dataset 111 --time-limit 200 `
+    --ours greedy-stabbing-no-decomp,greedy-stabbing-no-decomp-paper-boundary,greedy-stabbing-no-decomp-paper `
+    --reuse data\benchmark\per-dataset-111\benchmark.json --out data\benchmark\no-decomp-111\benchmark.json
+```
+
+```sh
+python scripts/benchmark.py --per-dataset 111 --time-limit 200 \
+    --ours greedy-stabbing-no-decomp,greedy-stabbing-no-decomp-paper-boundary,greedy-stabbing-no-decomp-paper \
+    --reuse data/benchmark/per-dataset-111/benchmark.json --out data/benchmark/no-decomp-111/benchmark.json
+```
 
 ## What is measured
 
