@@ -5,6 +5,7 @@
 #include "simplify/greedy_stabber/greedy_stabber_no_decomp.hpp"
 #include "test_main.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -306,6 +307,72 @@ TEST("greedy-stabbing/each stabber names itself") {
   CHECK(all[4]->name() == "greedy-stabbing-no-decomp");
   CHECK(all[5]->name() == "greedy-stabbing-no-decomp-paper");
   CHECK(all[6]->name() == "greedy-stabbing-no-decomp-paper-boundary");
+}
+
+// Curves of the kinds the corpus is made of and the kinds that have broken a stabber: walks,
+// a lattice like a GPS grid, steps along the axes, a zig-zag at the tangency, runs of repeats,
+// a circle, spikes, some at State Plane coordinates.
+Curve<2> family(std::mt19937& rng, int kind, std::size_t n, double step, double off) {
+  std::uniform_real_distribution<double> u(0.0, 1.0);
+  Curve<2> c;
+  double x = off;
+  double y = 0.6 * off;
+  double heading = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    const double k = static_cast<double>(i);
+    switch (kind) {
+      case 0: x += step * (u(rng) - 0.5); y += step * (u(rng) - 0.5); break;
+      case 1: heading += 0.3 * (u(rng) - 0.5); x += step * std::cos(heading);
+              y += step * std::sin(heading); break;
+      case 2: x = off + step * std::round(10 * u(rng));
+              y = 0.6 * off + step * std::round(10 * u(rng)); break;
+      case 3: (u(rng) < 0.5 ? x : y) += step * (u(rng) < 0.5 ? 1 : -1); break;
+      case 4: x = off + step * static_cast<double>(i % 2);
+              y = 0.6 * off + 1e-3 * step * u(rng); break;
+      case 5: if (u(rng) < 0.4) { x += step * u(rng); y += step * u(rng); } break;
+      case 6: x = off + step * std::cos(0.2 * k); y = 0.6 * off + step * std::sin(0.2 * k); break;
+      default: x += step; y = 0.6 * off + (i % 7 == 3 ? 3 * step : 0.0); break;
+    }
+    c.push_back({x, y});
+  }
+  return c;
+}
+
+// Theorem 3 in both halves. Ours at delta / (1 + eps) is within delta, so kappa(delta) is at most
+// its size, and ours at delta has at most twice that less two. Nothing else in the tests checks
+// the size bound; the corpus does, after the run.
+TEST("greedy-stabbing/within (1 + eps) delta and 2 kappa - 2 vertices, on curves of every kind") {
+  const ssk::frechet::Frechet<2> frechet;
+  std::mt19937 rng(89);
+  std::uniform_real_distribution<double> u(0.0, 1.0);
+  for (int trial = 0; trial < 160; ++trial) {
+    const double eps = std::vector<double>{0.1, 0.2, 0.3, 0.5}[static_cast<std::size_t>(trial % 4)];
+    const double off = trial % 3 == 0 ? 2.2e6 : 0.0;
+    const double step = std::pow(10.0, -2.0 + 4.0 * u(rng));
+    const Curve<2> curve =
+        family(rng, trial % 8, 3 + static_cast<std::size_t>(40 * u(rng)), step, off);
+    double delta = step * std::pow(10.0, -1.5 + 2.0 * u(rng));
+    if (trial % 8 == 4 && trial % 16 == 4) {
+      delta = step / (2.0 * (1.0 + eps)) * (1.0 - std::pow(10.0, -4.0 - 8.0 * u(rng)));
+    }
+    const std::string where = "trial " + std::to_string(trial) + ", eps " + std::to_string(eps);
+    const auto outer = stabbers({{"delta", delta}, {"eps", eps}});
+    const auto inner = stabbers({{"delta", delta / (1.0 + eps)}, {"eps", eps}});
+    for (std::size_t k = 0; k < outer.size(); ++k) {
+      if (eps < 0.2 && outer[k]->name().find("paper") != std::string::npos) {
+        continue;
+      }
+      const Curve<2> out = outer[k]->simplify(curve);
+      CHECK_MSG(frechet.within(curve, out, (1.0 + eps) * delta),
+                outer[k]->name() + " over the bound, " + where);
+      const Curve<2> witness = inner[k]->simplify(curve);
+      CHECK_MSG(out.size() <= 2 * std::max<std::size_t>(witness.size(), 2) - 2,
+                outer[k]->name() + ": " + std::to_string(out.size()) + " vertices against " +
+                    std::to_string(witness.size()) + " within delta, " + where);
+    }
+    CHECK_MSG(outer[3]->simplify(curve) == outer[0]->simplify(curve),
+              "shared is not naive, " + where);
+  }
 }
 
 }  // namespace
