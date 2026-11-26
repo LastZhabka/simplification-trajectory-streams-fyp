@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <random>
 #include <string>
 #include <utility>
@@ -68,6 +69,24 @@ TEST("frechet/decision and value agree either side of the answer") {
   const double d = f.distance(spike, chord, 1e-9);
   CHECK_MSG(f.within(spike, chord, d * 1.001), "must be within a radius above the distance");
   CHECK_MSG(!f.within(spike, chord, d * 0.999), "must not be within a radius below it");
+}
+
+// Bisection with no tolerance used to run for ever: the two halves met at adjacent doubles and
+// mid was one of them. With shared endpoints it never began, doubling a starting radius of 0.
+// Bisected to the end, the value is the least double the decision accepts.
+TEST("frechet/the value with no tolerance is the least radius the decision accepts") {
+  const Frechet<2> f;
+  const Curve<2> spike{{0.0, 0.0}, {1.0, 2.0}, {2.0, 0.0}};
+  const Curve<2> shifted{{0.0, 0.5}, {2.0, 0.5}};
+  const Curve<2> chord{{0.0, 0.0}, {2.0, 0.0}};
+  for (const auto& [a, b] : {std::pair{spike, shifted}, std::pair{spike, chord}}) {
+    for (const double tol : {0.0, -1.0}) {
+      const double d = f.distance(a, b, tol);
+      CHECK(f.within(a, b, d));
+      CHECK(!f.within(a, b, std::nextafter(d, 0.0)));
+    }
+  }
+  CHECK(f.distance(chord, chord, 0.0) <= std::numeric_limits<double>::min());
 }
 
 TEST("frechet/works in three dimensions") {

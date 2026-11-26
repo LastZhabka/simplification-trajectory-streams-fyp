@@ -15,6 +15,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <vector>
 
 namespace ssk::frechet {
@@ -59,7 +60,7 @@ class Frechet {
     double hi = std::max(std::sqrt(dist2(a.front(), b.front())),
                          std::sqrt(dist2(a.back(), b.back())));
     if (hi <= 0.0) {
-      hi = tol;
+      hi = tol > 0.0 ? tol : std::numeric_limits<double>::min();
     }
     while (!within(a, b, hi)) {
       hi *= 2.0;
@@ -67,6 +68,10 @@ class Frechet {
     double lo = 0.0;
     while (hi - lo > tol) {
       const double mid = 0.5 * (lo + hi);
+      // With no tolerance left the two meet at adjacent doubles, and mid is one of them.
+      if (mid <= lo || mid >= hi) {
+        break;
+      }
       if (within(a, b, mid)) {
         hi = mid;
       } else {

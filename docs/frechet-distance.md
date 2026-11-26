@@ -39,6 +39,9 @@ above r² and the answer be no. Integer curves meet it easily, `{{2, 3}, {2, 1},
 {0, 3}, {4, 2}}` against its chord at exactly 2: no at 2, yes at 2 + 10⁻¹². Nothing here asks
 at a distance exactly: `distance` bisects past it, and ours stays inside its bound by a margin.
 
+`distance` with a tolerance of 0 or less bisects to the end: the least double `within` accepts.
+It used to run for ever there, as the halves met at adjacent doubles; `measure` never asks it.
+
 The instance holds a scratch buffer for the free-space frontline, so a driver measuring a
 corpus reuses one allocation across millions of calls. That is upstream's design, kept.
 
