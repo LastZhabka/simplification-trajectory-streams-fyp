@@ -423,4 +423,71 @@ TEST("simplify/curve_of bridges a trajectory document") {
   CHECK_MSG(threw, "a 2D document must not load as a 3D curve");
 }
 
+// What GPS feeds them: a fix repeated while standing still, two fixes in the same millisecond,
+// a run of both, a track that never moves, and clocks in epoch milliseconds or from zero. A
+// zero-length segment or a zero time step must neither throw nor cost an endpoint.
+TEST("simplify/all keep both endpoints, in order, on repeated points and repeated times") {
+  std::uint32_t s = 4242;
+  const auto next = [&s] {
+    s = s * 1664525u + 1013904223u;
+    return static_cast<double>(s >> 8) / 16777216.0;
+  };
+  for (int trial = 0; trial < 400; ++trial) {
+    const std::size_t n = 3 + static_cast<std::size_t>(next() * (trial % 8 == 0 ? 300 : 40));
+    Curve<2> c;
+    Context in;
+    double x = 0.0;
+    double y = 0.0;
+    double t = (trial % 2 == 0) ? 1.7e12 : 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+      switch (trial % 5) {
+        case 0: if (next() < 0.5) { x += next(); } t += 1000; break;
+        case 1: x += next(); y += next(); t += next() < 0.4 ? 0 : 1000; break;
+        case 2: if (next() < 0.5) { x += next(); t += 1000; } break;
+        case 3: t += 1000; break;
+        default: x += next() - 0.5; y += next() - 0.5; t += 1000; break;
+      }
+      c.push_back({x, y});
+      in.t.push_back(t);
+    }
+    const std::string where = " on trial " + std::to_string(trial);
+    for (int m = 1; m <= 5; ++m) {
+      const auto target = static_cast<std::size_t>(std::ceil(n / std::pow(2.0, m)));
+      if (target < 2 || target >= n) {
+        break;
+      }
+      const auto dp =
+          ssk::simplify::DouglasPeucker<2>(Params{{"count", double(target)}}).indices(c);
+      check_contract(dp, n, "dpn" + where);
+      CHECK_MSG(dp.size() == target, "dpn" + where);
+      if (target >= 5) {
+        const auto sq =
+            ssk::simplify::Squish(Params{{"buffer_size", double(target)}}).indices(c, in);
+        check_contract(sq, n, "squish" + where);
+        CHECK_MSG(sq.size() <= target, "squish over its buffer" + where);
+      }
+      const Params ratio{{"cmp_ratio", std::pow(2.0, m)}, {"sed_error", 0.0}};
+      check_contract(ssk::simplify::SquishE(ratio).indices(c, in), n, "squish-e" + where);
+    }
+    for (const double threshold : {1e-6, 1e-2, 1.0, 100.0}) {
+      check_contract(ssk::simplify::Dots(Params{{"lssd_threshold", threshold}}).indices(c, in), n,
+                     "dots" + where);
+    }
+  }
+}
+
+// Douglas-Peucker splits at the point furthest from the chord, so with one point left to keep
+// it is the spike, wherever it stands and however small the rest of the noise.
+TEST("simplify/dp at three points keeps the point furthest from the chord") {
+  for (const std::size_t spike : {1u, 7u, 25u, 48u}) {
+    Curve<2> c;
+    for (std::size_t i = 0; i < 50; ++i) {
+      c.push_back({static_cast<double>(i), i == spike ? 9.0 : 0.01 * static_cast<double>(i % 3)});
+    }
+    const auto kept = ssk::simplify::DouglasPeucker<2>(Params{{"count", 3.0}}).indices(c);
+    CHECK_MSG((kept == std::vector<std::size_t>{0, spike, 49}),
+              "spike at " + std::to_string(spike));
+  }
+}
+
 }  // namespace

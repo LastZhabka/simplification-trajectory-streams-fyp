@@ -12,6 +12,7 @@
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -307,6 +308,138 @@ TEST("greedy-stabbing/each stabber names itself") {
   CHECK(all[4]->name() == "greedy-stabbing-no-decomp");
   CHECK(all[5]->name() == "greedy-stabbing-no-decomp-paper");
   CHECK(all[6]->name() == "greedy-stabbing-no-decomp-paper-boundary");
+}
+
+Curve<2> lattice_walk(std::mt19937& rng, std::size_t n) {
+  Curve<2> c;
+  double x = 0.0;
+  double y = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    c.push_back({x, y});
+    x += static_cast<double>(static_cast<int>(rng() % 5) - 1);
+    y += static_cast<double>(static_cast<int>(rng() % 5) - 2);
+  }
+  return c;
+}
+
+// The pipeline builds one simplifier per match, but nothing says it must: a stabber keeps
+// nothing of one curve into the next.
+TEST("greedy-stabbing/a simplifier run on one curve and another gives the first the same again") {
+  std::mt19937 rng(109);
+  const Curve<2> a = lattice_walk(rng, 80);
+  const Curve<2> b = lattice_walk(rng, 50);
+  for (const auto& s : stabbers({{"delta", 1.3}, {"eps", 0.3}})) {
+    const Curve<2> first = s->simplify(a);
+    (void)s->simplify(b);
+    CHECK_MSG(s->simplify(a) == first, s->name());
+  }
+}
+
+// run() works relative to the first vertex, which for integer coordinates is exact, so moving the
+// curve moves the output, but for the precision margin, which grows with the coordinates.
+TEST("greedy-stabbing/moving an integer curve by whole units moves the output with it") {
+  std::mt19937 rng(113);
+  const Curve<2> here = lattice_walk(rng, 70);
+  const double dx = 1048576.0;
+  const double dy = -524288.0;
+  Curve<2> there;
+  for (const auto& p : here) {
+    there.push_back({p[0] + dx, p[1] + dy});
+  }
+  const double delta = 0.73;
+  for (const auto& s : stabbers({{"delta", delta}, {"eps", 0.3}})) {
+    const Curve<2> a = s->simplify(here);
+    const Curve<2> b = s->simplify(there);
+    bool moved = a.size() == b.size();
+    for (std::size_t i = 0; moved && i < a.size(); ++i) {
+      moved = std::hypot(b[i][0] - dx - a[i][0], b[i][1] - dy - a[i][1]) <= 1e-6 * delta;
+    }
+    CHECK_MSG(moved, s->name() + ": " + std::to_string(a.size()) + " and " +
+                         std::to_string(b.size()) + " vertices");
+  }
+}
+
+// Legs 50 delta long and right-angled corners: each corner needs a vertex near it, the corners do,
+// so kappa is the corners and the two ends, within delta or within (1 + eps) delta alike. Then
+// Theorem 3 bounds ours from both sides by numbers known exactly.
+TEST("greedy-stabbing/an L, a U and a staircase take from kappa to 2 kappa - 2 vertices") {
+  const auto walk = [](std::vector<std::pair<double, double>> corners) {
+    Curve<2> c;
+    for (std::size_t k = 0; k + 1 < corners.size(); ++k) {
+      for (int i = 0; i < 100; ++i) {
+        const double t = i / 100.0;
+        c.push_back({corners[k].first + t * (corners[k + 1].first - corners[k].first),
+                     corners[k].second + t * (corners[k + 1].second - corners[k].second)});
+      }
+    }
+    c.push_back({corners.back().first, corners.back().second});
+    return c;
+  };
+  struct Shape {
+    const char* name;
+    Curve<2> curve;
+    std::size_t kappa;
+  };
+  for (const Shape& shape :
+       {Shape{"L", walk({{0, 0}, {50, 0}, {50, 50}}), 3},
+        Shape{"U", walk({{0, 0}, {50, 0}, {50, 50}, {0, 50}}), 4},
+        Shape{"staircase",
+              walk({{0, 0}, {50, 0}, {50, 50}, {100, 50}, {100, 100}, {150, 100}, {150, 150}}),
+              7}}) {
+    for (const double eps : {0.5, 0.2, 0.1}) {
+      for (const auto& s : stabbers({{"delta", 1.0}, {"eps", eps}})) {
+        if (eps < 0.2 && s->name().find("paper") != std::string::npos) {
+          continue;
+        }
+        const std::size_t k = s->simplify(shape.curve).size();
+        CHECK_MSG(k >= shape.kappa && k <= 2 * shape.kappa - 2,
+                  s->name() + " on the " + shape.name + " at eps " + std::to_string(eps) + ": " +
+                      std::to_string(k) + " vertices");
+      }
+    }
+  }
+}
+
+TEST("greedy-stabbing/eps near either end of (0, 1) keeps the bound") {
+  const ssk::frechet::Frechet<2> frechet;
+  for (Curve<2> curve : curves()) {
+    curve.resize(100);
+    for (const double delta : {0.05, 0.4}) {
+      for (const double eps : {0.01, 0.99}) {
+        for (const auto& s : stabbers({{"delta", delta}, {"eps", eps}})) {
+          if (eps < 0.05 && s->name().find("paper") != std::string::npos) {
+            continue;
+          }
+          CHECK_MSG(frechet.within(curve, s->simplify(curve), (1.0 + eps) * delta),
+                    s->name() + " at eps " + std::to_string(eps) + ", delta " +
+                        std::to_string(delta));
+        }
+      }
+    }
+  }
+}
+
+// The shared stabber marks a start where the sides it is beyond change, found by angle and
+// wrapped round the circle. Turning the curve about its first vertex in steps of a fifth of
+// the starts' spacing carries every crossing past every start, the last and first among them.
+TEST("greedy-stabbing/sharing changes nothing with the curve turned to every start's angle") {
+  std::mt19937 rng(127);
+  const Curve<2> walk = lattice_walk(rng, 60);
+  for (const double eps : {0.5, 0.2}) {
+    const auto starts = static_cast<int>(std::ceil(2.0 * std::acos(-1.0) / eps));
+    for (int step = 0; step < 5 * starts; ++step) {
+      const double turn = 2.0 * std::acos(-1.0) * step / (5.0 * starts) + 1e-3;
+      Curve<2> turned;
+      for (const auto& p : walk) {
+        turned.push_back({p[0] * std::cos(turn) - p[1] * std::sin(turn),
+                          p[0] * std::sin(turn) + p[1] * std::cos(turn)});
+      }
+      const Params params{{"delta", 1.1}, {"eps", eps}};
+      CHECK_MSG(ssk::simplify::GreedyStabbingShared(params).simplify(turned) ==
+                    ssk::simplify::GreedyStabbingNaive(params).simplify(turned),
+                "eps " + std::to_string(eps) + ", turned " + std::to_string(step) + " fifths");
+    }
+  }
 }
 
 // Curves of the kinds the corpus is made of and the kinds that have broken a stabber: walks,
