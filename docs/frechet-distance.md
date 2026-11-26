@@ -33,6 +33,12 @@ quadratic formula (see [Known issue](#known-issue-false-violations-at-tiny-radii
 bisects it, so it costs a tolerance and about nine decisions. Code that only needs a yes/no
 answer should ask for one.
 
+Exact means up to the rounding of one distance: at r equal to a distance the curves attain,
+where the free space touches a cell in a single point, the squared distance can round an ulp
+above r² and the answer be no. Integer curves meet it easily, `{{2, 3}, {2, 1}, {3, 3},
+{0, 3}, {4, 2}}` against its chord at exactly 2: no at 2, yes at 2 + 10⁻¹². Nothing here asks
+at a distance exactly: `distance` bisects past it, and ours stays inside its bound by a margin.
+
 The instance holds a scratch buffer for the free-space frontline, so a driver measuring a
 corpus reuses one allocation across millions of calls. That is upstream's design, kept.
 

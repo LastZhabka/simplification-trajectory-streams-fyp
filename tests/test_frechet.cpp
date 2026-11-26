@@ -4,8 +4,12 @@
 #include "frechet/frechet.hpp"
 #include "test_main.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <random>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -148,6 +152,127 @@ TEST("frechet/a point 1e-9 of a long segment off it is decided at its offset") {
     CHECK_MSG(f.within(segment, bent, 1.01 * d), "within just above the offset");
     CHECK_MSG(!f.within(segment, bent, 0.99 * d), "and not just below it");
     CHECK_CLOSE(f.distance(segment, bent, 1e-12), d, 1e-3 * d);
+  }
+}
+
+// Each is the smallest found on which one constraint of the diagram, taken out, says within when
+// the distance is more: a point's whole curve, a matching that may not run back up a cell, the
+// shortcut through a free top-right corner, and a bottom row that a far vertex cuts. The range
+// is the discrete distance of the curves cut 400 times per edge, and the piece's length below.
+TEST("frechet/curves on which a constraint of the free-space diagram decides") {
+  struct Case {
+    const char* what;
+    Curve<2> a;
+    Curve<2> b;
+    double low;
+    double high;
+  };
+  const Frechet<2> f;
+  for (const Case& c : {
+           Case{"the point's curve", {{4, 2}}, {{3, 3}, {0, 4}, {3, 3}}, 4.4642, 4.4721},
+           Case{"monotone in a cell", {{3, 4}, {3, 2}, {0, 2}}, {{3, 4}, {1, 4}, {2, 4}, {0, 2}},
+                2.0541, 2.0616},
+           Case{"the free corner", {{1, 3}, {3, 2}, {2, 3}},
+                {{1, 3}, {4, 1}, {1, 1}, {0, 3}, {2, 3}}, 2.1123, 2.1213},
+           Case{"the bottom row", {{1, 2}, {1, 3}, {1, 2}, {2, 4}}, {{4, 2}, {4, 4}, {4, 2}},
+                3.0358, 3.0414},
+       }) {
+    for (const auto& [a, b] : {std::pair{c.a, c.b}, std::pair{c.b, c.a}}) {
+      CHECK_MSG(!f.within(a, b, c.low - 0.01), std::string(c.what) + ": within below it");
+      CHECK_MSG(f.within(a, b, c.high + 0.01), std::string(c.what) + ": not within above it");
+    }
+  }
+}
+
+Curve<2> subdivide(const Curve<2>& c, int k) {
+  Curve<2> out;
+  for (std::size_t i = 0; i + 1 < c.size(); ++i) {
+    for (int j = 0; j < k; ++j) {
+      const double t = static_cast<double>(j) / k;
+      out.push_back({c[i][0] + t * (c[i + 1][0] - c[i][0]), c[i][1] + t * (c[i + 1][1] - c[i][1])});
+    }
+  }
+  out.push_back(c.back());
+  return out;
+}
+
+double longest_edge(const Curve<2>& c) {
+  double longest = 0.0;
+  for (std::size_t i = 0; i + 1 < c.size(); ++i) {
+    longest = std::max(longest, std::hypot(c[i + 1][0] - c[i][0], c[i + 1][1] - c[i][1]));
+  }
+  return longest;
+}
+
+double discrete_frechet(const Curve<2>& a, const Curve<2>& b) {
+  std::vector<double> prev(b.size());
+  std::vector<double> cur(b.size());
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    for (std::size_t j = 0; j < b.size(); ++j) {
+      const double d = std::hypot(a[i][0] - b[j][0], a[i][1] - b[j][1]);
+      if (i == 0) {
+        cur[j] = j == 0 ? d : std::max(cur[j - 1], d);
+      } else {
+        cur[j] = std::max(j == 0 ? prev[0] : std::min({prev[j], prev[j - 1], cur[j - 1]}), d);
+      }
+    }
+    std::swap(prev, cur);
+  }
+  return prev.back();
+}
+
+// The discrete distance between the curves cut into k pieces per edge is at least the
+// continuous one, and at most a piece longer: two bounds from a dynamic programme that shares
+// nothing with the free-space diagram. Curves that walk back along a line, repeat lattice
+// points or zig-zag are where a matching most easily goes wrong.
+TEST("frechet/the decision lies between the discrete distances of the curves cut finer") {
+  const Frechet<2> f;
+  std::mt19937 rng(61);
+  std::uniform_real_distribution<double> u(0.0, 1.0);
+  for (int trial = 0; trial < 1200; ++trial) {
+    const int family = trial % 5;
+    const double off = trial % 7 == 0 ? 1e6 : 0.0;
+    const auto make = [&](std::size_t n) {
+      Curve<2> c;
+      for (std::size_t i = 0; i < n; ++i) {
+        const double x = static_cast<double>(i);
+        switch (family) {
+          case 0: c.push_back({off + u(rng), off + u(rng)}); break;
+          case 1: c.push_back({off + u(rng), off}); break;
+          case 2: c.push_back({off + std::round(3 * u(rng)), off + std::round(3 * u(rng))}); break;
+          case 3: c.push_back({off + x + 0.3 * u(rng), off + 0.3 * u(rng)}); break;
+          default: c.push_back({off + (i % 2) + 0.01 * u(rng), off + 0.01 * u(rng)}); break;
+        }
+      }
+      return c;
+    };
+    const Curve<2> a = make(2 + trial % 6);
+    Curve<2> b = make(2 + (trial / 6) % 6);
+    if (family >= 3) {
+      b.front() = a.front();
+      b.back() = a.back();
+    }
+    const Curve<2> fine_a = subdivide(a, 16);
+    const Curve<2> fine_b = subdivide(b, 16);
+    const double upper = discrete_frechet(fine_a, fine_b);
+    const double lower = upper - std::max(longest_edge(fine_a), longest_edge(fine_b));
+    const double slack = 1e-9 * std::max(longest_edge(a), longest_edge(b)) + 1e-14 * off;
+    const std::string where = "trial " + std::to_string(trial);
+    CHECK_MSG(f.within(a, b, upper + slack), where + ": not within the upper bound");
+    CHECK_MSG(lower - slack <= 0.0 || !f.within(a, b, lower - slack),
+              where + ": within under the lower bound");
+    const double tol = 1e-12;
+    const double d = f.distance(a, b, tol);
+    for (const double r : {0.9 * d, 0.99 * d, 1.01 * d, 1.1 * d}) {
+      if (r < d && r >= d - tol) {
+        continue;
+      }
+      const Curve<2> back_a(a.rbegin(), a.rend());
+      const Curve<2> back_b(b.rbegin(), b.rend());
+      CHECK_MSG(f.within(a, b, r) == f.within(b, a, r), where + ": not symmetric");
+      CHECK_MSG(f.within(a, b, r) == f.within(back_a, back_b, r), where + ": not reversible");
+      CHECK_MSG(f.within(a, b, r) == (r > d), where + ": the decision and the value disagree");
+    }
   }
 }
 
