@@ -56,9 +56,9 @@ whose selection, ε or time limit differs, so the same trajectories, δ and ε a
 `settings.reused` names what came from where. **A run stopped part way** goes on from its last
 checkpoint with the same command and `--resume`: the cells of the implementations run that
 `--out` already holds are kept, after the same checks as `--reuse`, and only the others run.
-`settings.resumed` counts the kept cells, and `wall_seconds` adds up both runs. The three
-no-decomp stabbers against the run at 1 007 trajectories, which was resumed once after 10 000
-cells:
+`settings.resumed` counts the kept cells, and `wall_seconds` adds up the runs. The three
+no-decomp stabbers against the run at 1 007 trajectories, which was resumed twice, both times
+from the checkpoint at 10 000 cells:
 
 ```powershell
 python scripts\benchmark.py --per-dataset 111 --time-limit 200 `
@@ -406,18 +406,20 @@ That fits the per-dataset order. Why a larger δ adds rebuilds has not been meas
 ### Histograms
 
 `scripts/plot_benchmark.py` draws time per input vertex from `times/`, into `plots/` beside
-it:
+it. It draws all seven implementations, so it takes the `times/` of the direct run below, which
+holds this run's four as well:
 
-- One histogram per implementation and ε (`histograms/<ours>_eps<E>.png`, 20).
+- One histogram per implementation and ε (`histograms/<ours>_eps<E>.png`, 35).
 - `01_overview.png`, all of them as a grid.
 - `02_by_eps.png`, each implementation's ε on one axis.
 
-The histograms have a logarithmic x axis and a dashed median. The 6 cells that hit the limit
+The histograms have a logarithmic x axis and a dashed median. The 57 cells that hit the limit
 have only a lower bound, so they are counted in their panel's note rather than binned.
 
 The figures name the implementations as the write-up does: Algorithm 2 (shared), Algorithm 1
-(naive), Paper-Boundary and Paper-Grid (paper). Three line charts follow, the median against ε
-from 0.5 on the left to 0.05 on the right, one line per implementation:
+(naive), Paper-Boundary and Paper-Grid (paper), and the direct ones Direct-m-gon, Direct-Boundary
+and Direct-Grid (no-decomp, no-decomp-paper-boundary, no-decomp-paper). Three line charts follow,
+the median against ε from 0.5 on the left to 0.05 on the right, one line per implementation:
 
 - `03_eps_lines_log.png`, log y.
 - `04_eps_lines_linear.png`, linear y.
@@ -426,30 +428,107 @@ from 0.5 on the left to 0.05 on the right, one line per implementation:
 Two more are for the write-up, as PDF and PNG: white, in Computer Modern, no title or footer,
 drawn 3.15 in wide to sit two in a row of a 6.5 in text block at their own size:
 
-- `06_writeup_eps`, 05 with each line named on it rather than in a legend, and a marker per
-  implementation for grey print.
+- `06_writeup_eps`, 05 with the four decomposed lines named on it rather than in a legend, and a
+  marker per region and starts for grey print. A direct line is dashed in its twin's colour,
+  with its twin's marker hollow and no band, and a key tells dashed from solid. A name sits
+  under its line, or over the line and its dashed twin where the next line down is closer than
+  half a decade, never between the two.
 - `07_writeup_distributions`, 02 as one panel: a row per implementation on one log axis, each
   ε a kernel density over log time, light to dark as ε shrinks, each row scaled to the same
-  height.
+  height. A direct row is dashed, over its twin's.
 
 It needs matplotlib, from the venv.
 
 Their legend gives k, the exponent in time ∝ ε^k fitted over the five ε. Each is set beside
 its worst case:
 
-| | shared | naive | paper-boundary | paper |
-|---|---:|---:|---:|---:|
-| measured k | −0.47 | −1.08 | −1.16 | −2.01 |
-| worst case over these five ε, from the counts | −0.88 | −1.40 | −1.43 | −2.24 |
-| worst case | −1 | −3/2 | −5/3 | −8/3 |
+| | shared | naive | paper-boundary | paper | no-decomp | no-decomp-paper-boundary | no-decomp-paper |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| measured k | −0.47 | −1.08 | −1.16 | −2.01 | −1.13 | −1.44 | −2.30 |
+| worst case over these five ε, from the counts | −0.88 | −1.40 | −1.43 | −2.24 | | | |
+| worst case | −1 | −3/2 | −5/3 | −8/3 | −3/2, times log | −5/3, times log | −8/3, times log |
 
 Every one is shallower than its bound, as *Time per input vertex* above says: not every
-start survives every vertex. To draw the figures:
+start survives every vertex. A direct stabber's bound is its twin's times the log of the
+hull's sort, while its shadow has O(sides of the region) sides. To draw the figures:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\plot_benchmark.py --times data\benchmark\per-dataset-111\times
+.\.venv\Scripts\python.exe scripts\plot_benchmark.py --times data\benchmark\no-decomp-111\times
 ```
 
 ```sh
-.venv/bin/python scripts/plot_benchmark.py --times data/benchmark/per-dataset-111/times
+.venv/bin/python scripts/plot_benchmark.py --times data/benchmark/no-decomp-111/times
 ```
+
+## The direct stabbers at 1 007 trajectories
+
+2026-11-26, the three no-decomp stabbers of [convex-shadow-32.md](convex-shadow-32.md) §12, the
+paper's own step by a hull in the dual, at commit ff7019a. Run as `--per-dataset 111
+--time-limit 200 --ours greedy-stabbing-no-decomp,greedy-stabbing-no-decomp-paper-boundary,greedy-stabbing-no-decomp-paper
+--reuse data/benchmark/per-dataset-111/benchmark.json`, into `data/benchmark/no-decomp-111/`.
+That is the same 1 007 trajectories, δ, ε and limit, and the same machine, with the four
+decomposed stabbers' cells taken from the run above. Its `times/`, `summary/`, `pairwise.json`
+and `report.md` cover all seven.
+
+**45 315 cells, 45 264 finished, 51 hit the 200 s limit, 0 errors.** The run took 6 h 19 min of
+wall clock at 8 jobs, summed to its checkpoints. It was stopped twice, once when memory ran low
+and once when the laptop restarted, and went on each time with `--resume`. The cells done
+since the last checkpoint were run again.
+
+The limit was hit only by the grid variants. no-decomp-paper hit it 3 times at ε = 0.1 and
+45 times at ε = 0.05; no-decomp-paper-boundary hit it 3 times at ε = 0.05. Paper hit it 6
+times at ε = 0.05 in the run above.
+
+Best-of seconds summed over the 3 021 cells of each ε:
+
+| ε | no-decomp | no-decomp-paper-boundary | no-decomp-paper |
+|---|---:|---:|---:|
+| 0.5 | 30.2 s | 355.6 s | 677.4 s |
+| 0.25 | 59.2 s | 857.4 s | 2 779.0 s |
+| 0.2 | 76.8 s | 1 067.3 s | 4 050.4 s |
+| 0.1 | 174.4 s | 2 939.5 s | 19 359.8 s over 3 018, **3 TLE** |
+| 0.05 | 409.0 s | 9 149.8 s over 3 018, **3 TLE** | 112 551.8 s over 2 976, **45 TLE** |
+
+Nanoseconds per input vertex, p10 / median / p90 over the cells that finished. Beside each,
+the median over cells of its time over its naive twin's, counting a cell that hit the limit at
+the limit:
+
+| ε | no-decomp | over naive | no-decomp-paper-boundary | over paper-boundary | no-decomp-paper | over paper |
+|---|---:|---:|---:|---:|---:|---:|
+| 0.5 | 5 485 / 7 215 / 8 646 | 1.63× | 60 k / 83 k / 103 k | 1.76× | 113 k / 159 k / 196 k | 1.73× |
+| 0.25 | 10 560 / 14 067 / 17 180 | 1.67× | 138 k / 200 k / 250 k | 2.04× | 443 k / 643 k / 807 k | 1.99× |
+| 0.2 | 13 491 / 18 090 / 22 200 | 1.68× | 174 k / 247 k / 308 k | 2.04× | 662 k / 946 k / 1.18 M | 2.01× |
+| 0.1 | 29 k / 41 k / 51 k | 1.71× | 449 k / 680 k / 857 k | 2.58× | 3.28 M / 4.85 M / 6.33 M | 2.56× |
+| 0.05 | 66 k / 96 k / 118 k | 1.89× | 1.54 M / 2.32 M / 2.93 M | 3.36× | 21.8 M / 31.9 M / 42.2 M | 3.29× |
+
+- **The decomposition alone is worth 1.6–3.4×.** It is the only difference between each pair.
+  For the m-gon the gain grows little with finer ε, 1.63× to 1.89×. For `conv(G_v)` it grows
+  from 1.7× to 3.3×.
+- **The direct stabbers grow faster as ε shrinks.** Their k is −1.13, −1.44 and −2.30 against
+  their twins' −1.08, −1.16 and −2.01. From ε = 0.5 to 0.05 the median grows 13×, 28× and 201×
+  against 12×, 15× and 104×. The hull's sort is a log factor. What else grows with
+  `conv(G_v)`'s side count has not been measured.
+- **Shared over no-decomp-paper**, the paper's algorithm as written, is a median 154× at ε = 0.5,
+  478× at 0.25, 561× at 0.2, 2 268× at 0.1 and at least 10 062× at 0.05.
+
+**The same outputs, up to rounding**, over the cells where both finished:
+
+| | cells | same vertex count | identical to the bit |
+|---|---:|---:|---:|
+| no-decomp against naive | 15 105 | 15 105 | 10 171 (67.3%) |
+| no-decomp-paper-boundary against paper-boundary | 15 102 | 15 098 | 10 224 (67.7%) |
+| no-decomp-paper against paper | 15 057 | 15 053 | 9 769 (64.9%) |
+
+The 4 cells whose count differs are the same 4 for both grid variants, all at m2:
+
+| trajectory | ε | δ | direct | twin |
+|---|---:|---:|---:|---:|
+| geolife-007395 | 0.5 | 2.34e-5 | 890 | 888 |
+| mot-001680 | 0.5 | 0.158 | 481 | 479 |
+| mot-000208 | 0.5 | 0.493 | 68 | 66 |
+| mopsi-002662 | 0.05 | 2.3e-5 | 306 | 308 |
+
+All four are on `conv(G_v)`, which both grid variants share. `mot-000208` is the run
+convex-shadow-32.md §12 traces: the hull's survivors differ from naive's at 115 of its vertices.
+The benchmark does not decide the error. §12's 4 481 runs do: none went over the bound, and 4 469 were within
+3.4e-7 δ of naive.

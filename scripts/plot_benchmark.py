@@ -33,6 +33,7 @@ import numpy as np
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.colors import to_rgb  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.ticker import FixedLocator, FuncFormatter, LogLocator, NullLocator  # noqa: E402
 
 from plot_results import INK, INK_2, MUTED, SURFACE, style  # noqa: E402
@@ -298,10 +299,8 @@ def writeup_eps(data, eps_list, path):
     fig, ax = plt.subplots(figsize=WRITEUP_SIZE)
     fig.subplots_adjust(left=0.16, **WRITEUP_FRAME)
     xs = sorted(eps_list)
-    # Each line's name halfway between the two coarsest eps, where there is room: above the line,
-    # or below it when the next line up is closer than half a decade.
     # A direct stabber dashed over its twin, hollow and without a band, as its spread is its
-    # twin's; only the four decomposed ones are named, the caption names the dashed.
+    # twin's; only the four decomposed ones are named, and a key tells dashed from solid.
     at = {}
     for o in OURS:
         cells = [data[(o, eps)]["values"] for eps in xs]
@@ -316,12 +315,22 @@ def writeup_eps(data, eps_list, path):
                         color=SERIES[o], alpha=0.2, linewidth=0)
         ax.plot(xs, mid, color=SERIES[o], linewidth=1.2, marker=MARKER[o], markersize=3.5,
                 markeredgecolor="white", markeredgewidth=0.6)
-    named = tuple(o for o in OURS if o not in TWIN)
-    for o, above in zip(named, named[1:] + (None,)):
-        below = above is not None and math.log10(at[above] / at[o]) < 0.5
-        ax.annotate(NAME[o], ((xs[-1] + xs[-2]) / 2, at[o]), xytext=(0, -5 if below else 4),
-                    textcoords="offset points", ha="center", va="top" if below else "bottom",
-                    fontsize=7)
+    # Each name halfway between the two coarsest eps: under its line, in its band, when nothing
+    # is within half a decade below, else over the line and its dashed twin, never between them.
+    twin_of = {t: o for o, t in TWIN.items()}
+    for o in (o for o in OURS if o not in TWIN):
+        pair = [at[o]] + ([at[twin_of[o]]] if o in twin_of else [])
+        under = [y for y in at.values() if y < min(pair)]
+        below = not under or math.log10(min(pair) / max(under)) >= 0.5
+        ax.annotate(NAME[o], ((xs[-1] + xs[-2]) / 2, min(pair) if below else max(pair)),
+                    xytext=(0, -5 if below else 4), textcoords="offset points", ha="center",
+                    va="top" if below else "bottom", fontsize=7)
+    key = [Line2D([], [], color=INK_2, linewidth=1.2, marker="o", markersize=3.5,
+                  markeredgecolor="white", markeredgewidth=0.6, label="decomposed"),
+           Line2D([], [], color=INK_2, linewidth=1.0, linestyle=DASH, marker="o",
+                  markersize=3.2, markerfacecolor="white", markeredgecolor=INK_2,
+                  markeredgewidth=0.8, label="direct")]
+    ax.legend(handles=key, loc="upper left", frameon=False, fontsize=7, handlelength=2.6)
     span = xs[-1] - xs[0]
     ax.set_xlim(xs[-1] + 0.04 * span, xs[0] - 0.04 * span)
     ax.xaxis.set_major_locator(FixedLocator(xs))
