@@ -15,10 +15,6 @@
 // --skip-existing a trajectory that has one is finished, and an interrupted run resumes where
 // it stopped.
 //
-// --validate checks the algorithm's invariants as it runs (src/algo/validate) and puts the
-// counts in every result, in the summary and in the closing lines. It is off by default
-// because it costs time.
-//
 // --unscaled-delta runs ours at delta = d* instead of d* / (1 + eps): within (1 + eps) d*, so
 // with more error than the baseline, and with its size bound against kappa(d*). It is step 9
 // of docs/running.md, and writes under data/error-matched-unscaled unless --out says else.
@@ -51,7 +47,6 @@ struct Options {
   int shard = 0;
   int shards = 1;
   bool skip_existing = false;
-  bool validate = false;
   bool unscaled = false;
 };
 
@@ -59,7 +54,7 @@ void usage() {
   std::fprintf(stderr,
                "usage: ssk_match --in DIR --eps E [--ours NAME] [--distances DIR] [--out DIR] "
                "[--tol REL] [--rates A..B] [--limit N] [--shard I --shards N] [--skip-existing] "
-               "[--validate] [--unscaled-delta]\n"
+               "[--unscaled-delta]\n"
                "  ours:");
   for (const std::string& ours : pipelines::kOurs) {
     std::fprintf(stderr, " %s", ours.c_str());
@@ -99,8 +94,6 @@ Options parse_args(int argc, char** argv) {
       opt.shards = std::atoi(argv[++i]);
     } else if (arg == "--skip-existing") {
       opt.skip_existing = true;
-    } else if (arg == "--validate") {
-      opt.validate = true;
     } else if (arg == "--unscaled-delta") {
       opt.unscaled = true;
     } else {
@@ -132,7 +125,6 @@ int main(int argc, char** argv) {
   const frechet::Frechet<2> computer;
   const auto started = std::chrono::steady_clock::now();
   std::size_t matched = 0, points = 0, over = 0, skipped = 0;
-  validate::Stats validation{};
 
   for (const fs::path& file : files) {
     const std::string name = file.filename().string();
@@ -155,15 +147,12 @@ int main(int argc, char** argv) {
         }
         const pipelines::Match& match = matches.emplace_back(pipelines::match(
             computer, opt.ours, curve, json::parse_file(from.string()), opt.eps,
-            opt.relative_tol, opt.validate, opt.unscaled));
+            opt.relative_tol, opt.unscaled));
         pipelines::write_document(root / algorithm / dataset / rate / name,
                        pipelines::match_to_json(input, dataset, source, opt.eps, match));
 
         points += curve.size();
         over += !match.within_bound;
-        if (match.validation) {
-          validate::add(validation, *match.validation);
-        }
       }
     }
     pipelines::write_document(
@@ -183,15 +172,6 @@ int main(int argc, char** argv) {
   }
   if (skipped > 0) {
     std::printf("  %zu already done, skipped\n", skipped);
-  }
-  if (opt.validate) {
-    std::printf("  validation: %zu checks, %zu failed\n", validate::checked(validation),
-                validate::failed(validation));
-    for (std::size_t i = 0; i < validate::kChecks; ++i) {
-      std::printf("    %-18s %zu of %zu failed\n",
-                  validate::name(static_cast<validate::Check>(i)), validation[i].failed,
-                  validation[i].checked);
-    }
   }
   std::printf("  out: %s/%s/%s/{<algorithm>,summary}/%s/\n", opt.out.c_str(), opt.ours.c_str(),
               eps_dir.str().c_str(), dataset.c_str());

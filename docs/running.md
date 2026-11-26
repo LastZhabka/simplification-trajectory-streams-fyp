@@ -486,11 +486,6 @@ first.
 On disk, each ε of `mot-dancetrack` is 13 027 files and 55 MB: one result per baseline
 document plus one summary per trajectory.
 
-**Validating.** Add `--validate` to the argument list to have the algorithm's invariants
-checked as it runs, at 2–3.5× the time. Each shard's log then ends with a count per check,
-and step 11's script prints them pooled. What is checked is in [algorithm.md](algorithm.md) §8.
-Every `failed` count should be 0.
-
 **Resuming.** The summary is written last, so a trajectory that has one is finished. Rerunning
 the same command (`--skip-existing` is already in it) picks up where it stopped, losing at most
 the trajectory each shard was on. The shard count may change between runs.

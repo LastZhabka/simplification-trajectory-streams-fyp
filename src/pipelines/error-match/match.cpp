@@ -56,35 +56,15 @@ std::unique_ptr<simplify::Simplifier<2>> make_ours(const std::string& ours,
   throw std::runtime_error("error-match: no implementation of ours named '" + ours + "'");
 }
 
-json::Value validation_to_json(const validate::Stats& stats) {
-  json::Object checks;
-  for (std::size_t i = 0; i < validate::kChecks; ++i) {
-    checks[validate::name(static_cast<validate::Check>(i))] = json::Object{
-        {"checked", json::Value(stats[i].checked)},
-        {"failed", json::Value(stats[i].failed)},
-    };
-  }
-  return json::Object{
-      {"checked", json::Value(validate::checked(stats))},
-      {"failed", json::Value(validate::failed(stats))},
-      {"checks", json::Value(std::move(checks))},
-  };
-}
-
 Match match(const frechet::Frechet<2>& computer, const std::string& ours,
             const simplify::Curve<2>& input, json::Value baseline, double eps,
-            double relative_tol, bool validate, bool unscaled) {
+            double relative_tol, bool unscaled) {
   Match out;
   out.ours = ours;
   out.unscaled = unscaled;
   const double error = field(field(baseline, "frechet"), "distance").num();
   out.delta = unscaled ? error : error / (1.0 + eps);
-  // No implementation of ours is watched yet: with --validate the counts are all zero.
-  const validate::Validator validator;
   out.simplified = make_ours(ours, {{"delta", out.delta}, {"eps", eps}})->simplify(input);
-  if (validate) {
-    out.validation = validator.stats();
-  }
   out.measured = measure(computer, input, out.simplified, relative_tol);
   out.within_bound = computer.within(input, out.simplified, (1.0 + eps) * out.delta);
   out.baseline = std::move(baseline);
@@ -127,9 +107,6 @@ json::Value match_to_json(const io::Document& input, const std::string& dataset,
   if (!input.name.empty()) {
     out["name"] = json::Value(input.name);
   }
-  if (match.validation) {
-    out["validation"] = validation_to_json(*match.validation);
-  }
   return json::Value(std::move(out));
 }
 
@@ -165,17 +142,6 @@ json::Value summary_to_json(const io::Document& input, const std::string& datase
       {"input_size", json::Value(input.points.size())},
       {"pairs", json::Value(std::move(pairs))},
   };
-  validate::Stats total{};
-  bool validated = false;
-  for (const Match& match : matches) {
-    if (match.validation) {
-      validate::add(total, *match.validation);
-      validated = true;
-    }
-  }
-  if (validated) {
-    out["validation"] = validation_to_json(total);
-  }
   return json::Value(std::move(out));
 }
 

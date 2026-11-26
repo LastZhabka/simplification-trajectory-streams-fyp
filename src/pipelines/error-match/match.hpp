@@ -15,7 +15,6 @@
 #pragma once
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -23,7 +22,6 @@
 #include "io/trajectory.hpp"
 #include "measure.hpp"
 #include "simplify/simplifier.hpp"
-#include "validate/validate.hpp"
 
 namespace ssk::pipelines {
 
@@ -49,15 +47,11 @@ struct Match {
   simplify::Curve<2> simplified;
   Measurement measured;
   bool within_bound = false;  // the exact decision at the guarantee, (1 + eps) * delta
-  std::optional<validate::Stats> validation;  // set when the run was validated
 };
 
 [[nodiscard]] Match match(const frechet::Frechet<2>& computer, const std::string& ours,
                           const simplify::Curve<2>& input, json::Value baseline, double eps,
-                          double relative_tol, bool validate, bool unscaled);
-
-// {"checked", "failed", "checks": {<name>: {"checked", "failed"}}}
-[[nodiscard]] json::Value validation_to_json(const validate::Stats& stats);
+                          double relative_tol, bool unscaled);
 
 // Ours as a result document: a trajectory document of its points -- no clock, since its
 // vertices are not input vertices -- with params, stats, its measurement and the baseline
@@ -67,7 +61,7 @@ struct Match {
                                         const Match& match);
 
 // Every match of one trajectory as one small document, so scripts/comparison_stats.py opens
-// one file per trajectory rather than every result. Validation counts are summed over them.
+// one file per trajectory rather than every result.
 [[nodiscard]] json::Value summary_to_json(const io::Document& input, const std::string& dataset,
                                           const std::string& source, const std::string& ours,
                                           double eps, bool unscaled,

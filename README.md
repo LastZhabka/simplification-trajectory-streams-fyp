@@ -28,7 +28,6 @@ src/
     simplify/            the Simplifier interface, the four baselines, and ours: the greedy
                          stabbers in greedy_stabber/, decomposed and not
     frechet/             the continuous Fréchet distance
-    validate/            invariant checks, counted as they run; no stabber is watched yet
   pipelines/    C++      the experiment drivers
     simplify-sweep/      ssk_simplify   every baseline at every compression rate
     frechet-distance/    ssk_frechet    the error of each of those simplifications
@@ -72,8 +71,8 @@ sequence), as declared by `t_unit`. It is carried because the SED-based baseline
 clock, while Fréchet-bounded and perpendicular-distance simplification do not.
 
 A *result* document is a trajectory document of the simplified points, plus `algorithm`,
-`mode`, `params`, `stats` and `source`. A measured one adds `frechet`, and a validated run of
-ours adds `validation`. It does not repeat the input: `source` names it.
+`mode`, `params`, `stats` and `source`. A measured one adds `frechet`. It does not repeat the
+input: `source` names it.
 
 More on the data directories and how to refill them: [`data/README.md`](data/README.md).
 
@@ -200,11 +199,6 @@ each upstream and how each port was checked against it.
 **`frechet/`** is the continuous Fréchet distance. The decision `within(a, b, r)` is the
 primitive, and `distance` bisects it. [`docs/frechet-distance.md`](docs/frechet-distance.md).
 
-**`validate/`** checks the invariants our guarantee rests on while the algorithm runs — the
-grid polygon, every shadow, every emitted segment — and counts the outcomes instead of
-throwing, so a long run reports how many checks failed. It is off unless a validator is
-passed, because it costs 2–3.5×.
-
 ### `src/pipelines/` — the experiment
 
 Three binaries, run in this order, each reading the tree the one before wrote:
@@ -218,14 +212,14 @@ Three binaries, run in this order, each reading the tree the one before wrote:
 ```sh
 ./build/src/pipelines/simplify-sweep/ssk_simplify   --in data/trajectories/mopsi
 ./build/src/pipelines/frechet-distance/ssk_frechet  --in data/trajectories/mopsi
-./build/src/pipelines/error-match/ssk_match         --in data/trajectories/mopsi --eps 0.5 --validate
+./build/src/pipelines/error-match/ssk_match         --in data/trajectories/mopsi --eps 0.5
 python scripts/comparison_stats.py --matched data/error-matched
 ```
 
 ```powershell
 .\build\src\pipelines\simplify-sweep\ssk_simplify.exe   --in data\trajectories\mopsi
 .\build\src\pipelines\frechet-distance\ssk_frechet.exe  --in data\trajectories\mopsi
-.\build\src\pipelines\error-match\ssk_match.exe         --in data\trajectories\mopsi --eps 0.5 --validate
+.\build\src\pipelines\error-match\ssk_match.exe         --in data\trajectories\mopsi --eps 0.5
 python scripts\comparison_stats.py --matched data\error-matched
 ```
 
@@ -238,16 +232,14 @@ mirrors the first one document for document.
 
 **`ssk_match`** runs ours once per baseline document, at `δ = d*/(1+ε)` where `d*` is that
 baseline's measured error. Ours is then no worse than the baseline, and the question is how
-many vertices it needs. It measures ours in the same pass, checks the bound exactly, and with
-`--validate` counts the invariant checks into every result. `--ours` picks the implementation,
-`greedy-stabbing-shared` by default, `greedy-stabbing-naive`, `greedy-stabbing-naive-paper` or
-`greedy-stabbing-naive-paper-boundary`, or the same three with `no-decomp` for `naive`, and each
-gets its own tree. With `--validate` the
-counts are zero for now: no stabber is watched yet.
+many vertices it needs. It measures ours in the same pass and checks the bound exactly.
+`--ours` picks the implementation, `greedy-stabbing-shared` by default, `greedy-stabbing-naive`,
+`greedy-stabbing-naive-paper` or `greedy-stabbing-naive-paper-boundary`, or the same three with
+`no-decomp` for `naive`, and each gets its own tree.
 
 **`scripts/comparison_stats.py`** turns the summaries into the tables: coverage, each
-baseline's error at a fixed rate, ours against each baseline, Theorem 3 checked, and the
-validation counts, with each implementation of ours at each ε as its own run.
+baseline's error at a fixed rate, ours against each baseline, and Theorem 3 checked, with each
+implementation of ours at each ε as its own run.
 
 The first three take `--shard I --shards N` to split a dataset across processes and
 `--limit N` to stop early; `ssk_frechet` and `ssk_match` take `--skip-existing` to resume. A document is
@@ -262,7 +254,7 @@ rate rather than a fixed tolerance, and what the numbers can and cannot claim, i
 | | |
 |---|---|
 | [`docs/running.md`](docs/running.md) | every step from a fresh clone to the comparison tables, with costs |
-| [`docs/algorithm.md`](docs/algorithm.md) | our algorithm, `ssk_match`, the statistics and the validation |
+| [`docs/algorithm.md`](docs/algorithm.md) | our algorithm, `ssk_match` and the statistics |
 | [`docs/convex-shadow-32.md`](docs/convex-shadow-32.md) | the m-gon region, and why it has O(ε^(−1/2)) sides; the greedy stabbers in §10–11 |
 | [`docs/comparison.md`](docs/comparison.md) | the experimental protocol and what it can claim |
 | [`docs/simplification.md`](docs/simplification.md) | the baselines: interface, ports, deviations, verification |

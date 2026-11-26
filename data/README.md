@@ -52,8 +52,7 @@ Read it with `ssk::io::read_trajectory_file` (C++, `src/algo/io/trajectory.hpp`)
 
 A *result* document — what a simplification run writes — is the same document, its `points`
 now the simplified ones, plus `algorithm`, `mode`, `params`, `stats` and `source`, which names
-the input rather than repeating it. A measured one adds `frechet`, and a validated run of ours
-adds `validation`.
+the input rather than repeating it. A measured one adds `frechet`.
 
 ## Refilling it
 

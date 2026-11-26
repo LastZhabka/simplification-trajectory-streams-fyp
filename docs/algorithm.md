@@ -320,9 +320,8 @@ default, Algorithm 2 of the write-up with the offsets and the corners shared
 ([convex-shadow-32.md](convex-shadow-32.md) §11); `greedy-stabbing-naive`, Algorithm 1, with
 offsets and a cone per start (§10 there); or `greedy-stabbing-naive-paper` and
 `greedy-stabbing-naive-paper-boundary`, Algorithm 1 with the paper's `conv(G_v)` and grid
-starts, all of them or the boundary cells' only. With `--validate` the counts are zero: no
-stabber is watched yet. Each is its own run, as each ε is, so they can be
-compared on the same baseline operating points.
+starts, all of them or the boundary cells' only. Each is its own run, as each ε is, so they can
+be compared on the same baseline operating points.
 
 **It writes**, under a root per implementation and ε:
 
@@ -354,7 +353,6 @@ It exists so that the statistics read one small file per trajectory instead of e
 | `--limit N` | all | stop after N trajectories |
 | `--shard I --shards N` | 0 / 1 | process every Nth trajectory, starting at I |
 | `--skip-existing` | off | skip a trajectory whose summary exists |
-| `--validate` | off | check the algorithm's invariants as it runs and count the outcomes, §8; 2–3.5× the time |
 
 **It checks the guarantee as it goes.** Every run also takes the exact decision
 `Frechet::within(input, ours, (1+ε)·delta)`, with no tolerance, which costs about a ninth of the
@@ -529,6 +527,9 @@ roughly 4–5 GB per ε. That is an estimate from the sample.
 - **Not done:** there are no unit tests for `ssk_match` in `tests/`.
 
 ### Validation while it runs
+
+> **Gone, with `--validate`** (UPDATES, 2026-11-26): no greedy stabber was ever watched, and
+> unit tests check them instead. This is how it was at commit 902a3c5.
 
 `src/algo/validate/` checks the invariants the guarantee rests on, as `ConvexShadow` produces
 the objects they are about. `ssk_match --validate` turns it on. It is off by default: a

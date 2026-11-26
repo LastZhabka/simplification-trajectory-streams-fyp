@@ -33,8 +33,7 @@ convex-shadow implementations are gone (UPDATES 65): `docs/algorithm.md` and
 | `tests/` | C++ unit tests. | Own ~60-line harness — GoogleTest via FetchContent would break an offline configure. |
 | `src/algo/frechet/` | Continuous Frechet distance, `Frechet<D>`. | Ported from the GIS Cup 2017 winner (MIT, standard library only), cross-verified against two independent implementations. The decision `within()` is the primitive and is exact; `distance()` bisects it. |
 | `src/algo/simplify/` | `Simplifier<D>` + Douglas-Peucker, SQUISH, SQUISH-E, DOTS, and ours, the greedy stabbers in `greedy_stabber/`. | Ports of the reference implementations, not reinventions — match upstream behaviour and record any deviation in `docs/simplification.md`. **Keep them in upstream's form: no restructuring or clean-up of the ports or of `frechet/`.** Dimension is a template parameter; `simplify()` returns points because a future algorithm may invent them, and `SubsetSimplifier` adds `indices()` for the ones that don't. |
-| `src/algo/geometry/` | Plane geometry for the greedy stabbers: `Vec`, `ConvexPolygon` as unit normals and offsets, cones from a point, clipping, the hull. | The stabbers depend on it and on `GreedyStabber`, never on `validate` or on one another. |
-| `src/algo/validate/` | `validate::Validator`: checks a shadow-keeping algorithm's invariants as it runs and counts the outcomes. Written for the convex-shadow implementations; no stabber is watched yet, so `--validate` counts zero. | Counts, never throws — a corpus run must report how many checks failed, not stop at the first. Its predicates are its own, not the algorithm's, so the two can disagree. Off unless a validator is passed (`ssk_match --validate`), because it costs 2–3.5×. |
+| `src/algo/geometry/` | Plane geometry for the greedy stabbers: `Vec`, `ConvexPolygon` as unit normals and offsets, cones from a point, clipping, the hull. | The stabbers depend on it and on `GreedyStabber`, never on one another. |
 | `docs/` | `datasets.md`, `trajio.md`, `simplification.md`, `algorithm.md`, `convex-shadow-32.md`, `comparison.md`, `pipeline.md`, `frechet-distance.md`, `references.md`, `running.md`, `benchmark.md`, `results.md` | Measured numbers, not quoted ones. |
 | `src/pipelines/` | Experiment drivers, one directory each: `simplify-sweep` (`ssk_simplify`), `frechet-distance` (`ssk_frechet`), `error-match` (`ssk_match`), `benchmark` (`ssk_bench`), `target-match` (`ssk_target_search`, `ssk_target_match`: step 8, the baselines and ours at fixed error targets). `ssk_match` and `ssk_target_match` take `--unscaled-delta` for steps 9 and 10: ours at δ = the error rather than error/(1+ε). `corpus.{hpp,cpp}` is what they share: file list, sharding, atomic document write. | The algorithms are C++, so the driver is too — a Python one would spawn a process per trajectory. The exception is `scripts/benchmark.py`, which spawns `ssk_bench` once per cell on purpose: a process can be killed at the time limit, a thread cannot. Entry points live with their piece under `src/`, as `trajio` already does. Each keeps its logic in a library beside a thin `main`, so the tests drive it without running the binary. |
 
@@ -42,7 +41,7 @@ convex-shadow implementations are gone (UPDATES 65): `docs/algorithm.md` and
 "points": [[x, y], ...]}`. trajio writes it, `algo/io` reads it. `t` is
 optional (one per point; `unix_ms` absolute or `ms` from the sequence start) and exists for
 the SED-based baselines. A *result* document adds `algorithm`, `mode`, `params`, `stats`,
-`source`, and `frechet` once measured; ours adds `validation` when run with `--validate`. No CSV output anywhere — the CSV in the repo is dataset input
+`source`, and `frechet` once measured. No CSV output anywhere — the CSV in the repo is dataset input
 only.
 
 ## Running
@@ -64,7 +63,7 @@ cmake --build build -j
 .\build\tests\ssk_tests.exe [name-filter]
 .\build\src\pipelines\simplify-sweep\ssk_simplify.exe --in data\trajectories\mopsi --out data\simplified-trajectories
 .\build\src\pipelines\frechet-distance\ssk_frechet.exe --in data\trajectories\mopsi --out data\frechet-distances
-.\build\src\pipelines\error-match\ssk_match.exe --in data\trajectories\mopsi --eps 0.5 [--ours NAME] [--validate] [--unscaled-delta]
+.\build\src\pipelines\error-match\ssk_match.exe --in data\trajectories\mopsi --eps 0.5 [--ours NAME] [--unscaled-delta]
 .\build\src\pipelines\target-match\ssk_target_search.exe --in data\trajectories\mopsi [--no-dots]
 .\build\src\pipelines\target-match\ssk_target_match.exe --in data\trajectories\mopsi --eps 0.5 [--ours NAME] [--unscaled-delta]
 python scripts\comparison_stats.py --matched data\error-matched
@@ -85,7 +84,7 @@ cmake --build build -j
 ./build/tests/ssk_tests [name-filter]
 ./build/src/pipelines/simplify-sweep/ssk_simplify --in data/trajectories/mopsi --out data/simplified-trajectories
 ./build/src/pipelines/frechet-distance/ssk_frechet --in data/trajectories/mopsi --out data/frechet-distances
-./build/src/pipelines/error-match/ssk_match --in data/trajectories/mopsi --eps 0.5 [--ours NAME] [--validate] [--unscaled-delta]
+./build/src/pipelines/error-match/ssk_match --in data/trajectories/mopsi --eps 0.5 [--ours NAME] [--unscaled-delta]
 ./build/src/pipelines/target-match/ssk_target_search --in data/trajectories/mopsi [--no-dots]
 ./build/src/pipelines/target-match/ssk_target_match --in data/trajectories/mopsi --eps 0.5 [--ours NAME] [--unscaled-delta]
 python scripts/comparison_stats.py --matched data/error-matched

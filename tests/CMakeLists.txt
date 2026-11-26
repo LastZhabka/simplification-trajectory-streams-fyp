@@ -5,7 +5,6 @@ add_executable(ssk_tests
   test_sweep.cpp
   test_frechet.cpp
   test_measure.cpp
-  test_validate.cpp
   test_greedy_stabbing.cpp
   test_bench.cpp
   test_target.cpp

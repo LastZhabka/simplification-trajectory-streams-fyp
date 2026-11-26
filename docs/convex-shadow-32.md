@@ -376,8 +376,8 @@ vertex, O(ε^(−3/2)) with M = Θ(ε⁻¹) and m = Θ(ε^(−1/2)).
   | 0.5 | 6 | 12 | 13 | 225 | 120 |
   | 0.3 | 7 | 16 | 21 | 461 | 168 |
   | 0.1 | 11 | 28 | 63 | 3 009 | 472 |
-- **`--validate` checks nothing yet**: the validator was taken out to keep it small, and a
-  validated run reports 0 checks. The numbers below were measured with it in (entry 58).
+- **No validator**: it was taken out to keep it small, and `src/algo/validate/` and
+  `--validate` are now gone (2026-11-26). The numbers below were measured with it in (entry 58).
 
 **Measured** (2026-11-23), on the first 150 Mopsi and 40 GeoLife trajectories, ε ∈ {0.5, 0.3,
 0.1}, with δ at 0.0005, 0.003 and 0.02 of each trajectory's extent: 1 710 runs.
