@@ -84,7 +84,8 @@ void check_params(const std::string& name, double delta, double eps) {
 }
 
 // A few ulps inside (1 + eps) * delta, as every test near the error bound errs inward: cos and
-// sin round.
+// sin round. Below eps 0.02, at 28 sides and more, a corner can still round past by under an
+// ulp; run()'s margin, 2 ulps of delta at least, covers it. conv(G_v) is not shrunk at all.
 geometry::ConvexPolygon mgon(double delta, double eps) {
   return geometry::regular_polygon(
       sides(eps), (1.0 + eps) * delta * (1.0 - 4.0 * std::numeric_limits<double>::epsilon()));

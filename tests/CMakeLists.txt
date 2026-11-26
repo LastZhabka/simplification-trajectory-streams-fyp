@@ -8,6 +8,7 @@ add_executable(ssk_tests
   test_json.cpp
   test_measure.cpp
   test_greedy_stabbing.cpp
+  test_regions.cpp
   test_bench.cpp
   test_corpus.cpp
   test_target.cpp
