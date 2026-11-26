@@ -50,7 +50,8 @@ void write_number(std::ostream& out, double d) {
     out << "null";  // JSON has no infinity or NaN
     return;
   }
-  if (d == static_cast<double>(static_cast<long long>(d)) && std::fabs(d) < 1e15) {
+  // -0 is left to to_chars, which keeps its sign.
+  if (std::fabs(d) < 1e15 && d == std::trunc(d) && !(d == 0.0 && std::signbit(d))) {
     out << static_cast<long long>(d);
     return;
   }
@@ -230,12 +231,14 @@ struct Parser {
     if (start == i) {
       fail("unexpected character");
     }
-    try {
-      return Value(std::stod(s.substr(start, i - start)));
-    } catch (const std::exception&) {
+    // from_chars, not stod: stod throws on the subnormals to_chars writes, and reads 1.2.3 as 1.2.
+    double value = 0.0;
+    const auto [end, ec] = std::from_chars(s.data() + start, s.data() + i, value);
+    if (ec != std::errc() || end != s.data() + i) {
       i = start;
       fail("malformed number");
     }
+    return Value(value);
   }
 };
 
