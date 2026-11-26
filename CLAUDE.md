@@ -6,8 +6,11 @@ FYP. Ours are the greedy stabbers in `src/algo/simplify/greedy_stabber/`, each a
 regions and starts they take. `greedy_stabber_decomp.{hpp,cpp}` keep `S[p]` as offsets and a cone:
 `GreedyStabbingNaive` and `GreedyStabbingShared` are Algorithms 1 and 2 of the write-up, O(ε^(−3/2))
 and O(ε⁻¹) per vertex, and `GreedyStabbingNaivePaper` and `GreedyStabbingNaivePaperBoundary` are
-Algorithm 1 with the paper's `conv(G_v)` and grid starts (`docs/convex-shadow-32.md` §10–11). The
-rest is the baselines they are compared with and the pipelines that run the comparison. The
+Algorithm 1 with the paper's `conv(G_v)` and grid starts (`docs/convex-shadow-32.md` §10–11).
+`greedy_stabber_no_decomp.{hpp,cpp}` keep it as a polygon, stepped as the paper does,
+`S ← A_v ∩ F(S, p)`: `GreedyStabbingNoDecomp`, `GreedyStabbingNoDecompPaper` and
+`GreedyStabbingNoDecompPaperBoundary`, on the region and starts of the naive one of the same name
+(§12). The rest is the baselines they are compared with and the pipelines that run the comparison. The
 convex-shadow implementations are gone (UPDATES 65): `docs/algorithm.md` and
 `docs/convex-shadow-32.md` §1–9 describe them as of commit 902a3c5.
 

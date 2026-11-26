@@ -476,3 +476,134 @@ trajectories, ε ∈ {0.5, 0.3, 0.1}, δ at 0.0005, 0.003 and 0.02 of each exten
 The sharing is 3.3×, 4.9× and 7.4× at ε 0.5, 0.3 and 0.1. The paper's `conv(G_v)` and grid
 starts take 0.8–3.6% fewer vertices than the m-gon and circle, for 12–85× the naive stabber's
 time and 39–630× the shared one's.
+
+## 12. GreedyStabbingNoDecomp: the paper's step, a polygon per start
+
+`src/algo/simplify/greedy_stabber/greedy_stabber_no_decomp.{hpp,cpp}` holds Algorithm 1 of Cheng,
+Huang and Jiang as they write it. Each start keeps its shadow `S[p]` itself and steps it as
+`S[p] ← A_v ∩ F(S[p], p)`, with no offsets or cone kept beside it. There are three, one per
+naive stabber of §10, each with that stabber's region `A_v`, starts and emission, so only the
+step differs:
+
+| `--ours` | region and starts as | region | starts |
+|---|---|---|---|
+| `greedy-stabbing-no-decomp` | `greedy-stabbing-naive` | the m-gon | M on the circle of radius `δ` |
+| `greedy-stabbing-no-decomp-paper` | `greedy-stabbing-naive-paper` | `conv(G_v)` | every grid point of `G_v`, the paper's own |
+| `greedy-stabbing-no-decomp-paper-boundary` | `greedy-stabbing-naive-paper-boundary` | `conv(G_v)` | the grid points of the cells that meet the circle |
+
+They are `GreedyStabber`s. The geometry of the step is their own, in that file; the regions and
+starts are `greedy_stabber.cpp`'s, the same ones §10 takes. `greedy-stabbing-no-decomp-paper` was
+`greedy-stabbing-paper-original` for a day.
+
+**What each stores**, per start: `p`, and `S[p]` as its corners counter-clockwise with, for each
+edge, the half-plane `n·x ≤ b` it lies on.
+
+**What each computes for a vertex `v`**, per start, as the proof of the paper's Lemma 1(ii) does:
+
+1. The sides of `S[p]` that face `p`, `n·p > b`. If none does, `p ∈ S[p]`, `F` is the plane and
+   `S[p] ← A_v`, unless `p` was outside before, below. A run's starts begin with `S[p] = {p}`, a
+   shadow with no sides, so the first step gives each the region. If every side does, the shadow
+   has no area and the start dies.
+2. `F(S[p], p)`'s half-planes, of the paper's two kinds: the support lines of `S[p]` that separate
+   `p` from it, which are the sides that face `p`; and the lines through `p` tangent to `S[p]` at a
+   corner, through the corners where the facing sides stop and start. A cone of half a turn or
+   more, or of zero width, kills the start, as `geometry::intersect` does in §10.
+3. The intersection of those, `A_v`'s sides and a box twice the region's size around `v`, by the
+   convex hull the paper cites for it (Chazelle 1993, its [7]). About a point `c` strictly inside
+   the intersection, `n·x ≤ b` is `d·(x − c) ≤ 1` with `d = n / (b − n·c)`. The intersection is the
+   polar of the hull of the `d`. Its sides are the hull's corners, in the hull's order, and each of
+   its corners is where two consecutive sides meet. A `d` inside the hull is a half-plane that bounds
+   nothing, such as a facing side no stricter than `A_v`'s, or the box. The hull is Andrew's
+   monotone chain, O(N log N) for N half-planes. A result without area kills the start.
+
+**The point inside.** The paper does not say where `c` comes from; a linear program finds it. Two
+runs of Seidel's incremental algorithm, started at a corner of the box, give the intersection's
+leftmost and rightmost points, and `c` is the middle of the vertical chord halfway between them.
+No side can lie along that chord, so its middle is strictly inside when there is area. An empty
+program, or a `c` that is not strictly inside every half-plane, kills the start. The program gives
+way by 16 ulps of the coordinates, a constraint missed or a range shorter than nothing by that
+much counting as met. Without that, a tangent through a corner of `A_v` where two sides already
+meet left a single feasible point, which rounding emptied. That costs nothing: the hull is built
+about `c` with the strict test, so a program that gives way can only fail to find `c`.
+
+**Lines that are one are one.** Two half-planes whose difference stays within 16 ulps of the
+coordinates everywhere in the box are merged, keeping the one stricter at `v`. They are common.
+Where a vertex repeats, a side of `S[p]` is a side of `A_v`. Where a start of the grid lies on a
+side of `A_v`, its tangent runs along that side, off by the 1e-15 or so the tangent's direction
+carries from two points a few units apart. Kept apart, the program asked for the sign of a
+rounding error, and two consecutive sides met at a corner far off: in one run the "intersection"
+was larger than `A_v`. 16 ulps is within the margin `run()` leaves inside δ, 64 ulps of the
+extent. The tangents' normals are unit, so the test compares like with like. Comparing only the
+normals, to a few ulps, missed the tangent off by 2e-15.
+
+**Corners of sides all but parallel.** Two consecutive sides of a shadow can meet at an angle of
+1e-13. The two tangents from a start a few ulps beyond a side both run along it. Their corner
+from `geometry::meet`, whose cross products cancel to noise there, was off by ulps of the
+coordinates over that angle, 0.03 units at coordinates of 540. On MOT20's `mot-000208` the
+"intersection" lost 1.7% of the area that exact rational arithmetic gives for the same
+half-planes. The corners are now taken with Dekker's exact products, the build having no fused
+multiply-add. They are within a few ulps of where the two lines meet, however near parallel.
+
+**The lines are carried, not recomputed.** Each edge keeps the half-plane it came from, so whether
+it faces `p` is asked of that line and never of its corners. A tangent's `b` is `n·p` itself, so
+`p` is on it to the bit and it never faces `p` at a later step.
+
+**Once outside, always outside.** If `p ∉ S`, then `p ∉ F(S, p)`, so `p` never comes back into
+its shadow. Each start keeps a flag, set at the first step where a side faces `p`. Once it is
+set, a step where no side faces `p` kills the start, instead of handing it the whole region. The
+sides alone may not settle it on a sliver a few ulps wide between the two tangents, whose closing
+side rounding has lost. With Sutherland–Hodgman clipping, the version before this one, that
+happened once in 809 runs of `no-decomp-paper-boundary`, on MOT20's `mot-001866` at ε = 0.25:
+the start took the whole region and the output went over the bound. The decomposed stabbers
+cannot do this, as their cone only narrows.
+
+**Tests** keep both cases from `mot-001866`, each after two points that fix the origin and the
+precision margin and end the first run. A 9-point staircase went over the bound without the flag.
+A 5-point one was 1.6 δ from `naive-paper-boundary` without the merge and the program's give.
+
+**Cost.** Per start and vertex, two linear programs of O(N) expected, O(N²) at worst in the
+order given, and a hull of O(N log N), for N = m + f + 4 half-planes: the region's m sides, f
+facing sides, the two tangents and the box. That matches the paper's O(|S| + N log N) for d = 2,
+the linear programs aside. Before this, `A_v` was clipped by Sutherland–Hodgman, by only the
+facing sides stricter than `A_v` and the two tangents. The clipping used no point inside and was
+faster; it is not the paper's construction.
+
+**Measured** (2026-11-26), each against its naive stabber, both in one process, on the
+benchmark's cells (`data/benchmark/per-dataset-111`), each trajectory at its three δ, eight
+processes at a time on 8 cores. Per dataset:
+
+- `no-decomp`: the first 40, 40, 20 and 10 trajectories at ε = 0.5, 0.25, 0.1 and 0.05;
+- the two paper ones: the first 20, 8 and 3 at ε = 0.5, 0.25 and 0.1, the last two of at most
+  4 000 and 3 000 vertices.
+
+| | ε | runs | same vertex count | identical to the bit | within 1e-9 δ | over the bound | time, against naive |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `no-decomp` | 0.5 | 1 038 | 1 038 | 709 | 1 023 | 0 | 1.71× |
+| | 0.25 | 1 045 | 1 045 | 718 | 1 038 | 0 | 1.82× |
+| | 0.1 | 519 | 519 | 333 | 513 | 0 | 1.77× |
+| | 0.05 | 261 | 261 | 158 | 253 | 0 | 1.98× |
+| `no-decomp-paper-boundary` | 0.5 | 521 | 520 | 361 | 515 | 0 | 1.86× |
+| | 0.25 | 211 | 211 | 143 | 207 | 0 | 2.11× |
+| | 0.1 | 77 | 77 | 51 | 75 | 0 | 2.54× |
+| `no-decomp-paper` | 0.5 | 524 | 524 | 347 | 514 | 0 | 1.81× |
+| | 0.25 | 207 | 207 | 139 | 203 | 0 | 2.02× |
+| | 0.1 | 78 | 78 | 48 | 75 | 0 | 2.58× |
+
+- **Over the bound** is by the exact decision, on the no-decomp output.
+- **4 469 of the 4 481 runs are within 3.4e-7 δ of their naive stabber.** The other 12 are far
+  apart, 0.08–41 δ, and all but one have the same vertex count. None of them goes over the bound.
+  - 7 are at the precision floor, δ of 1e-7 on MOT pixels, where the margin is 1e-5 of δ and
+    every implementation's choices are rounding's.
+  - 5 are degenerate MOT20 and NGSIM tracks, whose starts of the grid lie on the region's sides.
+    Run against Sutherland–Hodgman from the same shadow, the hull's step agrees to 1e-9 of the
+    region's area at every step of all 5. The runs part by choices below that, at starts on a
+    side, which every implementation makes its own way.
+  - On `mot-000208`, at the first vertex where the survivors differ, the hull keeps a start that
+    naive also keeps and the clipping version dropped. Over the run, the clipping version's
+    survivors differ from naive's at 23 vertices and the hull's at 115. The hull ends with 68
+    vertices to naive's 66.
+- **The time** is the sum over the runs that emit more than one vertex: two linear programs and a
+  hull per start and step, against one pass for each of naive's offsets and cone.
+- **The clipping version** was within 6.6e-8 δ of naive in every one of these runs, at 0.95–1.30×
+  its time. It clipped `A_v` by the facing sides stricter than `A_v` and by the two tangents. Its
+  source is not in the repository.

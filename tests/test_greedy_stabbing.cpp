@@ -2,6 +2,7 @@
 // Algorithm 2 only shares Algorithm 1's computations, so its output is Algorithm 1's to the bit.
 #include "frechet/frechet.hpp"
 #include "simplify/greedy_stabber/greedy_stabber_decomp.hpp"
+#include "simplify/greedy_stabber/greedy_stabber_no_decomp.hpp"
 #include "test_main.hpp"
 
 #include <cmath>
@@ -34,6 +35,9 @@ std::vector<std::unique_ptr<Simplifier<2>>> stabbers(const Params& params) {
   out.push_back(std::make_unique<ssk::simplify::GreedyStabbingNaivePaper>(params));
   out.push_back(std::make_unique<ssk::simplify::GreedyStabbingNaivePaperBoundary>(params));
   out.push_back(std::make_unique<ssk::simplify::GreedyStabbingShared>(params));
+  out.push_back(std::make_unique<ssk::simplify::GreedyStabbingNoDecomp>(params));
+  out.push_back(std::make_unique<ssk::simplify::GreedyStabbingNoDecompPaper>(params));
+  out.push_back(std::make_unique<ssk::simplify::GreedyStabbingNoDecompPaperBoundary>(params));
   return out;
 }
 
@@ -75,6 +79,20 @@ TEST("greedy-stabbing/a spike to where two corners meet stays within (1 + eps) *
   }
 }
 
+// MOT20's mot-001866 at eps 0.25: a staircase of half-pixel steps, after two points that fix the
+// origin and the precision margin and end the first run. A clip left a start's shadow a sliver
+// between its two tangents, without the side that closed it, so no side faced p; the no-decomp
+// step took p back into its shadow, gave the start the whole region, and went over the bound.
+TEST("greedy-stabbing/a sliver between the tangents does not put p back in its shadow") {
+  const ssk::frechet::Frechet<2> frechet;
+  const Curve<2> stairs{{599.5, 1070.5}, {599.5, 721.5}, {840, 840},   {840, 840.5}, {839, 840.5},
+                        {839, 841},      {838, 841},     {838, 841.5}, {838, 842}};
+  const double delta = 0.26764416432842186;
+  for (const auto& s : stabbers({{"delta", delta}, {"eps", 0.25}})) {
+    CHECK_MSG(frechet.within(stairs, s->simplify(stairs), 1.25 * delta), s->name());
+  }
+}
+
 TEST("greedy-stabbing/sharing the computations changes nothing") {
   for (const Curve<2>& curve : curves()) {
     for (const double eps : {0.5, 0.3, 0.1, 0.05}) {
@@ -112,6 +130,56 @@ TEST("greedy-stabbing/sharing changes nothing on lattice walks, at any offset") 
       }
     }
   }
+}
+
+// The paper's own step keeps S[p] as a polygon, Algorithm 1 as offsets and a cone, and the two
+// are the same set, so on the same region and starts only rounding tells them apart.
+TEST("greedy-stabbing/the paper's own step agrees with Algorithm 1 on each region and starts") {
+  for (const Curve<2>& curve : curves()) {
+    for (const double eps : {0.5, 0.2}) {
+      for (const double delta : {0.05, 0.4, 2.0}) {
+        const Params params{{"delta", delta}, {"eps", eps}};
+        std::vector<std::unique_ptr<Simplifier<2>>> naive;
+        naive.push_back(std::make_unique<ssk::simplify::GreedyStabbingNaive>(params));
+        naive.push_back(std::make_unique<ssk::simplify::GreedyStabbingNaivePaper>(params));
+        naive.push_back(std::make_unique<ssk::simplify::GreedyStabbingNaivePaperBoundary>(params));
+        std::vector<std::unique_ptr<Simplifier<2>>> no_decomp;
+        no_decomp.push_back(std::make_unique<ssk::simplify::GreedyStabbingNoDecomp>(params));
+        no_decomp.push_back(std::make_unique<ssk::simplify::GreedyStabbingNoDecompPaper>(params));
+        no_decomp.push_back(
+            std::make_unique<ssk::simplify::GreedyStabbingNoDecompPaperBoundary>(params));
+        for (std::size_t k = 0; k < naive.size(); ++k) {
+          const Curve<2> a = naive[k]->simplify(curve);
+          const Curve<2> b = no_decomp[k]->simplify(curve);
+          bool close = a.size() == b.size();
+          for (std::size_t i = 0; close && i < a.size(); ++i) {
+            close = std::hypot(a[i][0] - b[i][0], a[i][1] - b[i][1]) <= 1e-9 * delta;
+          }
+          CHECK_MSG(close, no_decomp[k]->name() + " at eps " + std::to_string(eps) +
+                               ", delta " + std::to_string(delta) + ": " +
+                               std::to_string(a.size()) + " and " + std::to_string(b.size()) +
+                               " vertices");
+        }
+      }
+    }
+  }
+}
+
+// MOT20's mot-001866 at eps 0.25, after two points that fix the origin and the precision margin
+// and end the first run: a start of the grid on a side of the region, whose tangent is that side
+// to the ulp. Kept as two lines, they left the paper's step a corner far off or no point inside,
+// 1.6 delta from Algorithm 1; as one line, it is Algorithm 1 to the bit.
+TEST("greedy-stabbing/the paper's step takes a tangent along a side of the region as that side") {
+  const Curve<2> steps{
+      {599.5, 1070.5}, {599.5, 721.5}, {643, 1039}, {643.5, 1038}, {643.5, 1037.5}};
+  const Params params{{"delta", 0.26764416432842186}, {"eps", 0.25}};
+  const Curve<2> a = ssk::simplify::GreedyStabbingNaivePaperBoundary(params).simplify(steps);
+  const Curve<2> b = ssk::simplify::GreedyStabbingNoDecompPaperBoundary(params).simplify(steps);
+  bool close = a.size() == b.size();
+  for (std::size_t i = 0; close && i < a.size(); ++i) {
+    close = std::hypot(a[i][0] - b[i][0], a[i][1] - b[i][1]) <= 1e-9 * 0.26764416432842186;
+  }
+  CHECK(close);
 }
 
 TEST("greedy-stabbing/a straight line is one segment, a point repeated at most one") {
@@ -207,6 +275,9 @@ TEST("greedy-stabbing/each stabber names itself") {
   CHECK(all[1]->name() == "greedy-stabbing-naive-paper");
   CHECK(all[2]->name() == "greedy-stabbing-naive-paper-boundary");
   CHECK(all[3]->name() == "greedy-stabbing-shared");
+  CHECK(all[4]->name() == "greedy-stabbing-no-decomp");
+  CHECK(all[5]->name() == "greedy-stabbing-no-decomp-paper");
+  CHECK(all[6]->name() == "greedy-stabbing-no-decomp-paper-boundary");
 }
 
 }  // namespace

@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "simplify/greedy_stabber/greedy_stabber_decomp.hpp"
+#include "simplify/greedy_stabber/greedy_stabber_no_decomp.hpp"
 
 namespace ssk::pipelines {
 namespace {
@@ -42,6 +43,15 @@ std::unique_ptr<simplify::Simplifier<2>> make_ours(const std::string& ours,
   }
   if (ours == "greedy-stabbing-naive-paper-boundary") {
     return std::make_unique<simplify::GreedyStabbingNaivePaperBoundary>(params);
+  }
+  if (ours == "greedy-stabbing-no-decomp") {
+    return std::make_unique<simplify::GreedyStabbingNoDecomp>(params);
+  }
+  if (ours == "greedy-stabbing-no-decomp-paper") {
+    return std::make_unique<simplify::GreedyStabbingNoDecompPaper>(params);
+  }
+  if (ours == "greedy-stabbing-no-decomp-paper-boundary") {
+    return std::make_unique<simplify::GreedyStabbingNoDecompPaperBoundary>(params);
   }
   throw std::runtime_error("error-match: no implementation of ours named '" + ours + "'");
 }

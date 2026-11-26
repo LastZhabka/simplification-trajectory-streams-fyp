@@ -389,7 +389,10 @@ document is skipped. **`--eps` is required**, and each value is its own run unde
 vertex ([convex-shadow-32.md](convex-shadow-32.md) §11); `greedy-stabbing-naive`, the same
 without the sharing, O(ε^(−3/2)) per vertex (§10 there); or `greedy-stabbing-naive-paper` and
 `greedy-stabbing-naive-paper-boundary`, Algorithm 1 with the paper's `conv(G_v)` and grid
-starts. Each is also its own run, under
+starts; or `greedy-stabbing-no-decomp`, `greedy-stabbing-no-decomp-paper` and
+`greedy-stabbing-no-decomp-paper-boundary`, the same three stepped as the paper does, a polygon
+per start (§12).
+Each is also its own run, under
 `data/error-matched/<ours>/`. The commands below set it once at the top as `$ours`; to run
 another, change that line and run them again.
 

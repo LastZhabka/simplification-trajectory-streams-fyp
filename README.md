@@ -26,7 +26,7 @@ src/
     io/                  json.{hpp,cpp}, trajectory.{hpp,cpp}
     geometry/            plane geometry for ours: convex polygons, cones, clipping, the hull
     simplify/            the Simplifier interface, the four baselines, and ours: the greedy
-                         stabbers in greedy_stabber/
+                         stabbers in greedy_stabber/, decomposed and not
     frechet/             the continuous Fréchet distance
     validate/            invariant checks, counted as they run; no stabber is watched yet
   pipelines/    C++      the experiment drivers
@@ -243,7 +243,8 @@ baseline's measured error. Ours is then no worse than the baseline, and the ques
 many vertices it needs. It measures ours in the same pass, checks the bound exactly, and with
 `--validate` counts the invariant checks into every result. `--ours` picks the implementation,
 `greedy-stabbing-shared` by default, `greedy-stabbing-naive`, `greedy-stabbing-naive-paper` or
-`greedy-stabbing-naive-paper-boundary`, and each gets its own tree. With `--validate` the
+`greedy-stabbing-naive-paper-boundary`, or the same three with `no-decomp` for `naive`, and each
+gets its own tree. With `--validate` the
 counts are zero for now: no stabber is watched yet.
 
 **`scripts/comparison_stats.py`** turns the summaries into the tables: coverage, each
