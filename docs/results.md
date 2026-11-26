@@ -243,4 +243,5 @@ python scripts/comparison_stats.py --matched data/error-matched-unscaled > data/
 .venv/bin/python scripts/plot_results.py
 ```
 
-`plot_results.py` is the one script that needs a package (matplotlib); the venv has it.
+`plot_results.py` and `plot_benchmark.py` are the scripts that need a package (matplotlib);
+the venv has it.

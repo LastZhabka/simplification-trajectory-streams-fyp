@@ -47,9 +47,9 @@ only.
 
 ## Running
 
-The Python, `trajio` and `scripts/`, is standard library only: nothing to install. The one
-exception is `scripts/plot_results.py`, which draws the figures with matplotlib and runs from
-the venv. `trajio` needs `PYTHONPATH=src`.
+The Python, `trajio` and `scripts/`, is standard library only: nothing to install. The
+exceptions are `scripts/plot_results.py` and `scripts/plot_benchmark.py`, which draw the
+figures with matplotlib and run from the venv. `trajio` needs `PYTHONPATH=src`.
 
 ```powershell
 $env:PYTHONPATH = "$PWD\src"

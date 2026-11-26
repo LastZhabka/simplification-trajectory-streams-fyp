@@ -402,3 +402,54 @@ the direction `−n_k`.
 - A run that turns within a few δ, like a dancer, stays in it in many directions.
 
 That fits the per-dataset order. Why a larger δ adds rebuilds has not been measured.
+
+### Histograms
+
+`scripts/plot_benchmark.py` draws time per input vertex from `times/`, into `plots/` beside
+it:
+
+- One histogram per implementation and ε (`histograms/<ours>_eps<E>.png`, 20).
+- `01_overview.png`, all of them as a grid.
+- `02_by_eps.png`, each implementation's ε on one axis.
+
+The histograms have a logarithmic x axis and a dashed median. The 6 cells that hit the limit
+have only a lower bound, so they are counted in their panel's note rather than binned.
+
+The figures name the implementations as the write-up does: Algorithm 2 (shared), Algorithm 1
+(naive), Paper-Boundary and Paper-Grid (paper). Three line charts follow, the median against ε
+from 0.5 on the left to 0.05 on the right, one line per implementation:
+
+- `03_eps_lines_log.png`, log y.
+- `04_eps_lines_linear.png`, linear y.
+- `05_eps_band.png`, log y, shaded from p10 to p90.
+
+Two more are for the write-up, as PDF and PNG: white, in Computer Modern, no title or footer,
+drawn 3.15 in wide to sit two in a row of a 6.5 in text block at their own size:
+
+- `06_writeup_eps`, 05 with each line named on it rather than in a legend, and a marker per
+  implementation for grey print.
+- `07_writeup_distributions`, 02 as one panel: a row per implementation on one log axis, each
+  ε a kernel density over log time, light to dark as ε shrinks, each row scaled to the same
+  height.
+
+It needs matplotlib, from the venv.
+
+Their legend gives k, the exponent in time ∝ ε^k fitted over the five ε. Each is set beside
+its worst case:
+
+| | shared | naive | paper-boundary | paper |
+|---|---:|---:|---:|---:|
+| measured k | −0.47 | −1.08 | −1.16 | −2.01 |
+| worst case over these five ε, from the counts | −0.88 | −1.40 | −1.43 | −2.24 |
+| worst case | −1 | −3/2 | −5/3 | −8/3 |
+
+Every one is shallower than its bound, as *Time per input vertex* above says: not every
+start survives every vertex. To draw the figures:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\plot_benchmark.py --times data\benchmark\per-dataset-111\times
+```
+
+```sh
+.venv/bin/python scripts/plot_benchmark.py --times data/benchmark/per-dataset-111/times
+```
