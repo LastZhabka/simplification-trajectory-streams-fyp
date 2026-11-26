@@ -524,7 +524,7 @@ roughly 4–5 GB per ε. That is an estimate from the sample.
   finished trajectory, and both print as shown above. The strict decision at `(1+ε)δ` found 0 violations
   in 2 006 runs: the calibration samples of all nine datasets at ε = 0.5 and 0.3, plus 3
   trajectories each of `mot-dancetrack`, `mopsi` and `ngsim-us-101` at ε = 0.5.
-- **Not done:** there are no unit tests for `ssk_match` in `tests/`.
+- **Unit tests for `ssk_match`** are in `tests/test_match.cpp` (2026-11-26).
 
 ### Validation while it runs
 

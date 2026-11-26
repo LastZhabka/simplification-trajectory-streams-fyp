@@ -6,6 +6,7 @@ add_executable(ssk_tests
   test_frechet.cpp
   test_geometry.cpp
   test_json.cpp
+  test_match.cpp
   test_measure.cpp
   test_greedy_stabbing.cpp
   test_regions.cpp
