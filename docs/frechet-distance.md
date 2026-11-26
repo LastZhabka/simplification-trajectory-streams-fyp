@@ -225,7 +225,7 @@ the input.
 ### The bottleneck is I/O, not arithmetic
 
 The 6.6 core-hours are compute. The job also reads **every one of the ~786 000 result documents
-and their inputs**, which is the access pattern that made the corpus audit take about 2.5 hours
+and their inputs**, which is the access pattern that made the corpus audit (`ssk_audit`, since removed) take about 2.5 hours
 of wall clock across nine parallel processes while running at 5% CPU.
 
 Measured on `mot-dancetrack`, single process, nothing else running: **1.73 Gcells predicted

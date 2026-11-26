@@ -8,12 +8,11 @@ a library beside a thin `main` so the tests can drive it without running the bin
 | `simplify-sweep/` | `ssk_simplify` | every baseline's simplification of every trajectory, at every compression rate |
 | `frechet-distance/` | `ssk_frechet` | how far each of those simplifications is from the trajectory it came from |
 | `error-match/` | `ssk_match` | ours at each baseline's measured error — see [algorithm.md](algorithm.md) and [running.md](running.md) step 7 |
-| `audit/` | `ssk_audit` | checks result documents on disk against the trajectories they came from |
 
-The first three run in that order, each reading the tree the one before wrote; `ssk_audit` is
-verification, not a stage. `corpus.{hpp,cpp}` beside them is what all four share: the sorted,
-sharded file list, the baseline names, and a document write that renames into place so a file
-on disk is always a whole one. What the experiment is *for* is
+The three run in that order, each reading the tree the one before wrote. `corpus.{hpp,cpp}`
+beside them is what they share: the sorted, sharded file list, the baseline names, and a
+document write that renames into place so a file on disk is always a whole one. What the
+experiment is *for* is
 [comparison.md](comparison.md); this is how to run it and what it costs.
 
 ## The sweep

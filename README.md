@@ -33,8 +33,7 @@ src/
     simplify-sweep/      ssk_simplify   every baseline at every compression rate
     frechet-distance/    ssk_frechet    the error of each of those simplifications
     error-match/         ssk_match      ours at each baseline's measured error
-    audit/               ssk_audit      checks result documents against their inputs
-    corpus.{hpp,cpp}     what the four share: file list, sharding, atomic document write
+    corpus.{hpp,cpp}     what they share: file list, sharding, atomic document write
 
 scripts/        comparison_stats.py, the statistics over what ssk_match wrote
 tests/          C++ unit tests, own harness
@@ -208,14 +207,13 @@ passed, because it costs 2–3.5×.
 
 ### `src/pipelines/` — the experiment
 
-Four binaries, run in this order, each reading the tree the one before wrote:
+Three binaries, run in this order, each reading the tree the one before wrote:
 
 | Binary | Reads | Writes |
 |---|---|---|
 | `ssk_simplify` | `data/trajectories/<dataset>` | `data/simplified-trajectories/<algorithm>/<dataset>/m<rate>/<name>.json` |
 | `ssk_frechet` | the two above | `data/frechet-distances/<algorithm>/<dataset>/m<rate>/<name>.json` |
 | `ssk_match` | trajectories and distances | `data/error-matched/<ours>/eps<E>/{<algorithm>,summary}/<dataset>/...` |
-| `ssk_audit` | trajectories and simplifications | nothing; reports documents that are not a subsequence of their input |
 
 ```sh
 ./build/src/pipelines/simplify-sweep/ssk_simplify   --in data/trajectories/mopsi

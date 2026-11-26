@@ -280,41 +280,6 @@ DOTS results from before the fix are not comparable with new ones wherever the o
 a backwards link, so regenerate the DOTS tree rather than mixing the two. Both incidents are
 written up in `archive/`.
 
-### Verifying a corpus you did not just produce
-
-The guard covers anything the current driver writes. To check a corpus produced by an older
-driver, or after changing a port, `ssk_audit` reads what is actually on disk and matches each
-result against its input on **position and timestamp together** — coordinates alone give false
-failures wherever a trace repeats a fix:
-
-```sh
-for ds in data/trajectories/*/; do
-  ./build/src/pipelines/audit/ssk_audit --in "$ds" --results data/simplified-trajectories
-done
-```
-
-```powershell
-foreach ($ds in Get-ChildItem data\trajectories -Directory) {
-  .\build\src\pipelines\audit\ssk_audit.exe --in $ds.FullName --results data\simplified-trajectories
-}
-```
-
-It exits non-zero when it finds anything, so it drops straight into a script. `--paths` prints
-only the offending paths, which makes removal a pipe — the tool never deletes anything itself:
-
-```sh
-./build/src/pipelines/audit/ssk_audit --in data/trajectories/ngsim-us-101 \
-    --results data/simplified-trajectories --paths | xargs rm
-```
-
-```powershell
-.\build\src\pipelines\audit\ssk_audit.exe --in data\trajectories\ngsim-us-101 `
-    --results data\simplified-trajectories --paths | Remove-Item
-```
-
-It is not fast — it reads every document — so budget a couple of hours for the whole corpus,
-and run it per dataset in parallel as with the sweep.
-
 ## 6. Measure the error
 
 The eight smaller datasets first — about 90 core-minutes of compute between them, over half of
