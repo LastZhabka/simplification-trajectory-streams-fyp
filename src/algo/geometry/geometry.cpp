@@ -173,11 +173,13 @@ Polygon cut(Polygon poly, Vec p, const Wedge& w) {
 
 Vec closest(const Polygon& poly, Vec q) {
   bool inside = true;
+  double perimeter = 0.0;
   Vec best = poly[0];
   for (std::size_t i = 0; i < poly.size(); ++i) {
     const Vec a = poly[i];
     const Vec ab = poly[(i + 1) % poly.size()] - a;
     const double length = norm(ab);
+    perimeter += length;
     const double reach = norm(q - a) + norm(q - a - ab);
     // Only an edge a few ulps long is skipped, its direction being noise. Measured against reach
     // instead, every edge of a sliver far from q was skipped, and q came back as inside it.
@@ -190,7 +192,10 @@ Vec closest(const Polygon& poly, Vec q) {
       best = on;
     }
   }
-  return inside ? q : best;
+  // A point inside is no further from the boundary than the perimeter. One that is, of a polygon
+  // whose every edge was skipped, is outside it: a shadow a few ulps wide far from the first
+  // vertex took a vertex a delta away as inside.
+  return inside && norm(q - best) <= perimeter ? q : best;
 }
 
 Polygon full_convex_hull(Polygon points, bool sorted) {

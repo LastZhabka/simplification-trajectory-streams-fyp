@@ -6,6 +6,7 @@
 #include "test_main.hpp"
 
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <random>
 #include <stdexcept>
@@ -76,6 +77,33 @@ TEST("greedy-stabbing/a spike to where two corners meet stays within (1 + eps) *
   const double delta = 3.333333356009115e-05;
   for (const auto& s : stabbers({{"delta", delta}, {"eps", 0.5}})) {
     CHECK_MSG(frechet.within(mopsi, s->simplify(mopsi), 1.5 * delta), s->name() + " on mopsi");
+  }
+}
+
+// The same spike far from the first vertex, its gap just over run()'s precision margin, which
+// is ulps of that distance. The shadow is then a few ulps of its coordinates wide, closest()
+// skipped every edge of it, and A was emitted, a delta from B: 1.72 delta against 1.5.
+TEST("greedy-stabbing/the spike far from the first vertex, just over the margin, keeps the bound") {
+  const ssk::frechet::Frechet<2> frechet;
+  const double pi = std::acos(-1.0);
+  const double ulp = std::numeric_limits<double>::epsilon();
+  for (const auto& [eps, corner] : {std::pair{0.5, -pi / 2}, std::pair{0.2, pi / 8}}) {
+    for (const double far : {1e2, 1e4, 1e6}) {
+      for (const double over : {1.01, 1.1, 1.3, 1.5}) {
+        const double gap = over * ulp * (65.0 * far + 6.0);
+        const double r = 2.0 * (1.0 + eps) * (1.0 - gap);
+        const double x = far - 10.0;
+        const Curve<2> spike{{0, 0},  {far - 20.0, 0},
+                             {x, 0},  {x, 10},
+                             {x + r * std::cos(corner), 10 + r * std::sin(corner)},
+                             {x, 10}};
+        for (const auto& s : stabbers({{"delta", 1.0}, {"eps", eps}})) {
+          CHECK_MSG(frechet.within(spike, s->simplify(spike), 1.0 + eps),
+                    s->name() + " at eps " + std::to_string(eps) + ", " + std::to_string(far) +
+                        " from the first vertex, " + std::to_string(over) + " x the margin");
+        }
+      }
+    }
   }
 }
 

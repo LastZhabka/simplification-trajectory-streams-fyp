@@ -441,7 +441,8 @@ On a resume it adds `N already done, skipped`. A run that breaks the bound adds
 appeared once, on 2026-11-24, at ε = 0.5: 11 of 857 456 matches, in two Mopsi and three MOT20
 trajectories, up to twice the bound. `geometry::closest` returned the query point as inside a
 shadow that had shrunk to a sliver far from it; fixed the same day, with a regression test in
-`tests/test_greedy_stabbing.cpp`. A resumed run rewrites the logs of the shards it skips, so
+`tests/test_greedy_stabbing.cpp`, and again on 2026-11-26 for such a sliver far from the first
+vertex, where the first fix did not reach ([results.md](results.md)). A resumed run rewrites the logs of the shards it skips, so
 check the result documents (`within_bound` in each summary) as well as the logs.
 
 **The precision floor.** A baseline whose error d* equals its measurement tolerance has error 0

@@ -192,6 +192,11 @@ inspection.
    to where two m-gons meet corner to corner left a shadow 10⁻¹⁰δ wide; `closest` skipped every
    one of its edges as degenerate, measuring "degenerate" against the distance to the query
    point. Now an edge is skipped only when ulps long against its own coordinates. 0 over since.
+   That held near the first vertex only: far from it such a shadow has every edge a few ulps of
+   its coordinates long, all were skipped, and q was still inside. A synthetic spike 10–10⁶δ
+   from the first vertex, its gap just over `run`'s margin, went over in 1 532 of 4 368 runs, at
+   1.72δ against 1.5δ; none of the corpus runs did. Since 2026-11-26 q is kept only when it is
+   also within the shadow's perimeter of its nearest boundary point, which a point inside is.
 2. **Under the precision margin, `run` returned the input whole.** Where a baseline's error is
    0 within measurement — a budget that dropped only exact repeats of a GPS fix — step 7 asked
    ours for a δ of a few ulps of the coordinates, below the margin `run` keeps for rounding, and
