@@ -22,7 +22,8 @@ add_library(ssk
   src/algo/io/trajectory.cpp
   src/algo/geometry/geometry.cpp
   src/algo/simplify/dots.cpp
-  src/algo/simplify/greedy_stabbing.cpp
+  src/algo/simplify/greedy_stabber/greedy_stabber.cpp
+  src/algo/simplify/greedy_stabber/greedy_stabber_decomp.cpp
   src/algo/simplify/squish.cpp
   src/algo/simplify/squish_e.cpp
   src/algo/validate/validate.cpp

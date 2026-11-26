@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <utility>
 
-#include "simplify/greedy_stabbing.hpp"
+#include "simplify/greedy_stabber/greedy_stabber_decomp.hpp"
 
 namespace ssk::pipelines {
 namespace {

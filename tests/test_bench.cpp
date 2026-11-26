@@ -1,6 +1,6 @@
 // Timing ours for docs/benchmark.md, and the line ssk_bench prints.
 #include "bench.hpp"
-#include "simplify/greedy_stabbing.hpp"
+#include "simplify/greedy_stabber/greedy_stabber_decomp.hpp"
 #include "test_main.hpp"
 
 #include <cmath>

@@ -323,15 +323,15 @@ region and the segments only; there are no per-start shadows to check.
 
 ## 10. GreedyStabbingNaive: the naive planar algorithm, O(ε^(−3/2)) per vertex
 
-`GreedyStabbingNaive` (`src/algo/simplify/greedy_stabbing.{hpp,cpp}`, `--ours
-greedy-stabbing-naive`; `greedy-stabbing` before entry 62)
-implements Algorithm 1 of the write-up *Faster δ-simplification of Trajectory Streams*, its
-naive planar algorithm. The region is §6's m-gon; each start keeps its own offsets, as in §8,
-and a cone instead of a polygon, as in §9.
-It is the first `GreedyStabber` (`src/algo/simplify/greedy_stabber.hpp`): the loop over the
-vertices, the restarts and the last segment are the base's, and the steps below its overrides.
-Its geometry is `src/algo/geometry/`, and it uses nothing of the other implementations: the
-region is a `ConvexPolygon` and the side count its own, the same m as `ConvexShadow32::sides`.
+`GreedyStabbingNaive` (`src/algo/simplify/greedy_stabber/greedy_stabber_decomp.{hpp,cpp}`,
+`--ours greedy-stabbing-naive`; `greedy-stabbing` before entry 62) implements Algorithm 1 of the
+write-up *Faster δ-simplification of Trajectory Streams*, its naive planar algorithm. The region
+is §6's m-gon; each start keeps its own offsets, as in §8, and a cone instead of a polygon, as in
+§9. It is the first `GreedyStabber` (`src/algo/simplify/greedy_stabber/greedy_stabber.hpp`): the
+loop over the vertices, the restarts and the last segment are the base's, and the steps below its
+overrides. Its geometry is `src/algo/geometry/`, and it uses nothing of the other
+implementations: the region is a `ConvexPolygon` and the side count its own, the same m as
+`ConvexShadow32::sides`, built in `greedy_stabber.cpp`.
 
 **What it stores**, for the open run:
 
@@ -368,7 +368,7 @@ vertex, O(ε^(−3/2)) with M = Θ(ε⁻¹) and m = Θ(ε^(−1/2)).
   into its edges' half-planes. The starts are every grid point of `G_v`.
   `GreedyStabbingNaivePaperBoundary` (`--ours greedy-stabbing-naive-paper-boundary`) has the same
   region and keeps only the corners of the cells that meet the circle, the starts of §6–8. All of
-  it is built in `greedy_stabbing.cpp`, not taken from those implementations, and the starts are
+  it is built in `greedy_stabber.cpp`, not taken from those implementations, and the starts are
   ordered nearest `v` first, so the start emitted is the nearest that survived:
 
   | ε | m-gon sides | `conv(G_v)` sides | circle of radius `δ` | every grid point | boundary cells |
@@ -387,7 +387,7 @@ vertex, O(ε^(−3/2)) with M = Θ(ε⁻¹) and m = Θ(ε^(−1/2)).
   the same starts and emission): equal vertex counts in every run, 1 614 identical to the bit and
   the rest within 4.3e-8 δ. The reference at first disagreed in one run. The fault was its own:
   a cut through a corner left an edge a few ulps long, whose direction is noise. Once it skips
-  such edges, the two agree. `greedy_stabbing.cpp` never uses a shadow's edges.
+  such edges, the two agree. `greedy_stabber_decomp.cpp` never uses a shadow's edges.
 - 0 over the bound by the exact decision; 0 failures in 28 348 997 checks of the region, every
   start's shadow and the segments.
 - Vertices and time, unvalidated, one run each, all four in the same session:
@@ -403,9 +403,9 @@ starts, at 3.7–4.4× the speed of `convex-shadow-32-sidenorms`.
 
 ## 11. GreedyStabbingShared: Algorithm 2, O(ε⁻¹) per vertex
 
-`GreedyStabbingShared` (`src/algo/simplify/greedy_stabbing.{hpp,cpp}`, `--ours
-greedy-stabbing-shared`) implements Algorithm 2 of the same write-up: §10 with the computations
-shared between starts. Same region, starts and emission; another `GreedyStabber`.
+`GreedyStabbingShared` (`src/algo/simplify/greedy_stabber/greedy_stabber_decomp.{hpp,cpp}`,
+`--ours greedy-stabbing-shared`) implements Algorithm 2 of the same write-up: §10 with the
+computations shared between starts. Same region, starts and emission; another `GreedyStabber`.
 
 **What it stores**, for the open run:
 

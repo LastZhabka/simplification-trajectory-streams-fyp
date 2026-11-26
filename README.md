@@ -26,7 +26,7 @@ src/
     io/                  json.{hpp,cpp}, trajectory.{hpp,cpp}
     geometry/            plane geometry for ours: convex polygons, cones, clipping, the hull
     simplify/            the Simplifier interface, the four baselines, and ours: the greedy
-                         stabbers, greedy_stabber.hpp and greedy_stabbing.{hpp,cpp}
+                         stabbers in greedy_stabber/
     frechet/             the continuous Fréchet distance
     validate/            invariant checks, counted as they run; no stabber is watched yet
   pipelines/    C++      the experiment drivers
@@ -169,7 +169,7 @@ and the trajectory document layer on top of it.
 
 ```cpp
 #include "simplify/douglas_peucker.hpp"
-#include "simplify/greedy_stabbing.hpp"
+#include "simplify/greedy_stabber/greedy_stabber_decomp.hpp"
 
 const auto curve = ssk::simplify::curve_of<2>(doc);
 

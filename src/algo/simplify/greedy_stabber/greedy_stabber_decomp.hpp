@@ -1,6 +1,7 @@
 // The planar greedy stabbers of "Faster δ-simplification of Trajectory Streams", a Simplifier
-// each. Unless said otherwise every region is the same regular m-gon moved to a vertex, and the
-// starts are M = ⌈2π/ε⌉ points on the circle of radius δ. docs/convex-shadow-32.md §10–11.
+// each. Each keeps S[p] decomposed, as offsets and the cone R(S[p], p), never as a polygon.
+// Unless said otherwise every region is the same regular m-gon moved to a vertex, and the starts
+// are M = ⌈2π/ε⌉ points on the circle of radius δ. docs/convex-shadow-32.md §10–11.
 #pragma once
 
 #include <string>

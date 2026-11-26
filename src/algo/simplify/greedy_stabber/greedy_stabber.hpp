@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <limits>
 #include <span>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -16,6 +17,20 @@
 #include "simplify/simplifier.hpp"
 
 namespace ssk::simplify {
+
+void check_params(const std::string& name, double delta, double eps);
+
+// The write-up's region and starts around a vertex at the origin: the regular m-gon with the
+// fewest sides between the circles of radius (1 + eps/2) delta and (1 + eps) delta, and
+// M = ceil(2 pi / eps) points on the circle of radius delta.
+[[nodiscard]] geometry::ConvexPolygon mgon(double delta, double eps);
+[[nodiscard]] std::vector<geometry::Vec> circle(double delta, double eps);
+
+// The paper's G_v around a vertex at the origin: the cells of side eps delta / (2 sqrt 2), with v
+// at a corner, that meet the disk of radius (1 + eps/2) delta. Its region conv(G_v), and its grid
+// points, or with `boundary` those of only the cells that meet the circle, nearest v first.
+[[nodiscard]] geometry::ConvexPolygon grid_hull(double delta, double eps);
+[[nodiscard]] std::vector<geometry::Vec> grid_points(double delta, double eps, bool boundary);
 
 template <class Candidate>
 class GreedyStabber {

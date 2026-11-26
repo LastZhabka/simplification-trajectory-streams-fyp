@@ -1,7 +1,7 @@
 // Every greedy stabber keeps the guarantee, d_F <= (1 + eps) * delta, decided exactly, and
 // Algorithm 2 only shares Algorithm 1's computations, so its output is Algorithm 1's to the bit.
 #include "frechet/frechet.hpp"
-#include "simplify/greedy_stabbing.hpp"
+#include "simplify/greedy_stabber/greedy_stabber_decomp.hpp"
 #include "test_main.hpp"
 
 #include <cmath>
