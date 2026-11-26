@@ -292,6 +292,14 @@ def ratio_summary(pairs, limit):
             "only_a_finished": a_only, "only_b_finished": b_only, "neither_finished": neither}
 
 
+def per_vertex(cell, limit):
+    if cell["status"] == "ok":
+        return {"ns_per_vertex": 1e9 * cell["best"] / cell["points"]}
+    if cell["status"] == "time_limit_exceeded":
+        return {"ns_per_vertex_at_least": 1e9 * limit / cell["points"]}
+    return {}
+
+
 def write_derived(root, results, selection, settings):
     by = groups(results)
     eps_list, limit = settings["eps"], settings["time_limit"]
@@ -309,7 +317,8 @@ def write_derived(root, results, selection, settings):
                 "rule": t["rule"], "points": t["points"],
                 "cells": [{"rate": c["rate"], "delta": c["delta"], "eps": c["eps"],
                            "status": c["status"], "best": c.get("best"),
-                           "seconds": c.get("seconds"), "output_size": c.get("output_size")}
+                           "seconds": c.get("seconds"), "output_size": c.get("output_size"),
+                           **per_vertex(c, limit)}
                           for c in cells]})
         path = f"{root}/times/{o}.json"
         write_json(path, {"algorithm": o, "settings": settings, "trajectories": trajectories})

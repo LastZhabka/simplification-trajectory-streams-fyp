@@ -8,8 +8,12 @@ thing faster; [convex-shadow-32.md](convex-shadow-32.md) §10–11 describes the
 |---|---|---|---|---|
 | `greedy-stabbing-shared` | shared | m-gon | M = ⌈2π/ε⌉ on the δ-circle | O(M + m²) = O(ε⁻¹), Algorithm 2 |
 | `greedy-stabbing-naive` | naive | m-gon | the same | O(Mm) = O(ε^(−3/2)), Algorithm 1 |
-| `greedy-stabbing-naive-paper-boundary` | paper-boundary | `conv(G_v)` | grid points of the cells of `G_v` meeting the circle, O(ε⁻¹) | O(ε^(−3/2)) |
-| `greedy-stabbing-naive-paper` | paper | `conv(G_v)` | every grid point of `G_v`, O(ε⁻²) | O(ε^(−5/2)) |
+| `greedy-stabbing-naive-paper-boundary` | paper-boundary | `conv(G_v)` | grid points of the cells of `G_v` meeting the circle, O(ε⁻¹) | O(ε^(−5/3)) |
+| `greedy-stabbing-naive-paper` | paper | `conv(G_v)` | every grid point of `G_v`, O(ε⁻²) | O(ε^(−8/3)) |
+
+Algorithm 1 costs O(sides of the region) per start and vertex. `conv(G_v)` has Θ(ε^(−2/3)) sides,
+the hull of the lattice points in a disc ([convex-shadow-32.md](convex-shadow-32.md) §4), where the
+m-gon has Θ(ε^(−1/2)); hence the paper variants' bounds.
 
 The question is the one Algorithm 2 exists to answer: **what does sharing the offsets and the
 `Q[p]` between starts buy, and what does the paper's grid cost**, at the ε a user would pick.
@@ -37,7 +41,7 @@ Beside `--out` it writes:
 | file | what |
 |---|---|
 | `benchmark.json` | every cell, the selection and the settings |
-| `times/<ours>.json` | every time of one implementation, grouped by trajectory: each δ and ε, its status, the best and every repeat, the output size |
+| `times/<ours>.json` | every time of one implementation, grouped by trajectory with its N: each δ and ε, its status, the best and every repeat, the output size, and `ns_per_vertex`, the best over N; a cell that hit the limit has `ns_per_vertex_at_least`, the limit over N |
 | `summary/<ours>.json` | that implementation's distributions per ε, over all cells and per dataset: seconds, ns per input vertex and output size, as count, min, p10, p25, median, p75, p90, p99, max and mean; and how many finished, hit the limit or failed |
 | `pairwise.json` | for each pair a, b, per ε, over all cells and per dataset: the distribution of b's time over a's, how many times faster a is. `finished` counts only cells both finished; `with_bounds` also counts those one of them did not, with the limit standing in for its time |
 
@@ -198,7 +202,7 @@ over paper-boundary 12× and 45×. **Shared is the fastest in every one of the 1
 
 Down a column it follows the bounds: shared over naive grows about as ε^(−1/2), 3.6× for ε ten
 times finer, the m it saves per start; anything over paper grows fastest, since paper's starts
-are O(ε⁻²). Naive over paper-boundary stays at 11–13×, both being O(ε^(−3/2)): paper-boundary
+are O(ε⁻²). Naive over paper-boundary stays at 11–13×, both having O(ε⁻¹) starts: paper-boundary
 has 7–9× the starts (472 against 63 at ε = 0.1) and a region of 2–2.5× the sides (28 against
 11).
 
@@ -238,7 +242,7 @@ Nanoseconds, summed time over summed N:
 \* over the 289 cells that finished, so it understates.
 
 From ε = 0.5 to 0.05, ten times finer, shared is 3.7× slower, naive 12×, paper-boundary 14×
-and paper 101× at least. All grow more slowly than their worst cases — 10×, 32×, 32× and 316× —
+and paper 101× at least. All grow more slowly than their worst cases — 10×, 32×, 46× and 464× —
 which assume every start survives every vertex; on these traces they do not. The order and the
 spread between them are the bounds'.
 
@@ -272,3 +276,105 @@ never came near the limit.
 
 `report.md` ends with every cell of the eight long-tail trajectories. Every cell of the run is
 in `benchmark.json` and, by implementation and trajectory, in `times/<ours>.json`.
+
+## Measured at 1 007 trajectories
+
+2026-11-24, `--per-dataset 111 --time-limit 200`, at commit 584ba5c (the exact marking), into
+`data/benchmark/per-dataset-111/`. The selection is 111 per dataset plus the long tail:
+**1 007 trajectories, 1 414 193 points, 60 420 cells**. It took 9 278 s of wall clock, 2 h 35 min
+at 8 jobs. **60 414 finished, 6 hit the 200 s limit, 0 errors.** All 6 are the paper stabber at
+ε = 0.05, on geolife-001523 (92 645 points) and mopsi-006752 (31 741), at all three δ each.
+Shared and naive are **identical to the bit in all 15 105 cells**.
+
+Best-of seconds summed over the 3 021 (trajectory, δ) cells of each ε:
+
+| ε | shared | naive | paper-boundary | paper |
+|---|---:|---:|---:|---:|
+| 0.5 | 4.5 s | 19.1 s | 207.3 s | 402.2 s |
+| 0.25 | 5.9 s | 36.7 s | 430.5 s | 1 414.3 s |
+| 0.2 | 7.6 s | 47.1 s | 535.5 s | 2 056.0 s |
+| 0.1 | 10.1 s | 105.0 s | 1 161.9 s | 8 039.4 s |
+| 0.05 | 14.8 s | 222.7 s | 3 026.6 s | 37 677.6 s over 3 015, **6 TLE** |
+
+Median speedup of shared over cells, and the smallest in any cell. A cell that hit the limit
+counts at the limit:
+
+| ε | vs naive | vs paper-boundary | vs paper |
+|---|---:|---:|---:|
+| 0.5 | 4.7× (min 1.2×) | 50× (min 7.5×) | 97× (min 19×) |
+| 0.25 | 7.0× (min 1.4×) | 80× (min 13×) | 261× (min 29×) |
+| 0.2 | 7.2× (min 1.5×) | 81× (min 10×) | 313× (min 26×) |
+| 0.1 | 12.6× (min 2.7×) | 137× (min 17×) | 974× (min 88×) |
+| 0.05 | 18.1× (min 3.6×) | 241× (min 26×) | ≥ 3 368× (min 357×) |
+
+Nanoseconds per input vertex, the distribution over cells as p10 / median / p90:
+
+| ε | shared | naive | paper-boundary | paper |
+|---|---:|---:|---:|---:|
+| 0.5 | 658 / 947 / 1 669 | 3 831 / 4 507 / 5 468 | 40 k / 49 k / 58 k | 79 k / 94 k / 111 k |
+| 0.25 | 794 / 1 215 / 2 353 | 7 320 / 8 682 / 10 276 | 83 k / 101 k / 121 k | 274 k / 332 k / 393 k |
+| 0.2 | 935 / 1 476 / 3 210 | 9 194 / 11 141 / 13 320 | 103 k / 125 k / 150 k | 399 k / 485 k / 571 k |
+| 0.1 | 1 159 / 1 920 / 4 375 | 20 k / 25 k / 30 k | 218 k / 271 k / 328 k | 1.60 M / 1.92 M / 2.28 M |
+| 0.05 | 1 598 / 2 791 / 6 660 | 43 k / 53 k / 63 k | 569 k / 713 k / 868 k | 8.2 M / 9.8 M / 11.8 M |
+
+How it compares with the 98-trajectory run above:
+
+- Shared's speedups are 0.9–1.2× those of the 98-trajectory run. They are higher at every ε
+  but 0.2, by about what the exact marking gained (1.1–1.2×), though the selection differs
+  too.
+- Per vertex, shared has the widest spread of the four, 2.5–4.2× from p10 to p90. Its cost per
+  vertex depends on how many starts survive, which the trace sets. The naive stabbers spread
+  only 1.4–1.5×.
+- Shared's extra vertices over paper-boundary are the same: +4.8% at ε = 0.5, +0.5% at 0.05.
+- Per dataset, shared over naive is again largest on NGSIM (30× at ε = 0.05 on I-80 and
+  US-101) and smallest on DanceTrack (7×).
+
+Every table, per dataset too, is in `report.md` beside the data. Every cell, with
+`ns_per_vertex`, is in `times/<ours>.json`.
+
+Why shared spreads so much more is the trace. At ε = 0.05 its median per dataset runs from
+1 720 ns on NGSIM I-80 and 1 728 on US-101, the peak of its histogram, up to 6 852 on
+DanceTrack, the tail. Naive's runs only from 48 823 (DanceTrack) to 61 252 (MOT17).
+
+δ adds to it, for shared only. Its median at ε = 0.05 is 2 364 ns at m2, 2 956 at m4 and
+3 624 at m6 (884, 970, 1 021 at ε = 0.5); the other three stay within 3% across the three δ.
+So *What is selected* above, that the time is set by ε and not by δ, holds for them and no
+longer for shared.
+
+#### What sets shared's time: the rebuilds
+
+The instrumented build of *Shared, before and after the exact marking* was run once more, on
+every (trajectory, δ) of this run at ε = 0.5 and 0.05: 6 042 runs, 75 s. It counts, per vertex,
+the starts alive and the rebuilds of `Q[p]`. The counts are in `shared_counts.json` beside the
+data. Medians over cells, and a least-squares fit of each cell's ns per vertex to its counts:
+
+| | ε = 0.5 | ε = 0.05 |
+|---|---:|---:|
+| starts alive per vertex | 11.2 of 13 | 99.9 of 126 |
+| rebuilds per vertex (bound 2m) | 1.47 (12) | 2.79 (30) |
+| naive ≈ a + b·alive | 218 + 391·alive, R² 0.55 | 1 768 + 509·alive, R² 0.84 |
+| shared ≈ a + b·alive + c·rebuilds | 307 + 0.4·alive + 418·rebuilds, R² 0.91 | 853 + 3.3·alive + 569·rebuilds, R² 0.95 |
+| shared on alive alone | R² 0.01 | R² 0.01 |
+
+Shared's time is its rebuilds, each about what naive pays per live start, since it is the same
+work. A live start costs shared 0.4–3 ns.
+
+- **Per dataset**, at ε = 0.05, the rebuilds per vertex run from 1.16 (US-101) and 1.20
+  (I-80) to 9.63 (DanceTrack), in the order of shared's time. The live starts run only from 93.9
+  to 125.0, in the order of naive's. Paper-boundary and paper are 13.4–13.7× and 183–192× naive
+  on every dataset.
+- **Per δ**, the rebuilds grow from 1.88 to 3.18 to 4.39 at m2, m4, m6 (1.21, 1.59, 1.85 at
+  ε = 0.5). The live starts stay at 98–101.
+- **Segment length does not explain it.** MOT17 has the longest segments, a median of 177 input
+  vertices per output segment at ε = 0.05, and among the fewest rebuilds. The rank correlation
+  between segment length and shared's time over all cells is 0.15.
+
+Why the trace matters: `ℓ_k` meets the δ-circle around `T_1` iff
+`−δ − b < min_j n_k·(T_j − T_1) < δ − b`, with `(1 + ε/2)δ ≤ b ≤ (1 + ε)δ`. So a line can split
+the starts only while the run has gone more than `εδ/2`, and nowhere more than `(2 + ε)δ`, in
+the direction `−n_k`.
+
+- A straight run soon leaves that range in every direction but those near perpendicular to it.
+- A run that turns within a few δ, like a dancer, stays in it in many directions.
+
+That fits the per-dataset order. Why a larger δ adds rebuilds has not been measured.
