@@ -36,6 +36,7 @@ data/target-simplified/
 data/target-matched/
 data/error-matched-unscaled/
 data/target-matched-unscaled/
+data/size-matched/
 data/ratio-buckets.*
 data/plots/
 
