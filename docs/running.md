@@ -1,8 +1,9 @@
 # From zero to Fréchet distances
 
 Every step from a fresh clone to a measured error for every simplification, to ours run at
-each of those errors (step 7), to both sides held to the same fixed errors (step 8), and to
-both again with ours run at the error itself rather than inside it (steps 9 and 10).
+each of those errors (step 7), to both sides held to the same fixed errors (step 8), to
+both again with ours run at the error itself rather than inside it (steps 9 and 10), and to
+ours searched to each baseline's size (step 11).
 **Each step gives the PowerShell and the POSIX shell form**, since the
 project is developed on Windows but nothing in it is Windows-only — see *Portability* at the
 end for what actually differs.
@@ -16,19 +17,19 @@ them are measured in hours.
 
 No stage clears the directory it writes into, so a rerun onto an old tree mixes the two. Remove
 what you are about to regenerate. `data/error-matched` and `data/target-matched` also hold the
-reports step 11 wrote and the shard logs; move those out first if you want them.
+reports step 12 wrote and the shard logs; move those out first if you want them.
 
 ```powershell
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue `
   data\simplified-trajectories, data\frechet-distances, data\error-matched, `
   data\target-simplified, data\target-matched, data\error-matched-unscaled, `
-  data\target-matched-unscaled, data\ratio-buckets.json, data\plots
+  data\target-matched-unscaled, data\size-matched, data\ratio-buckets.json, data\plots
 ```
 
 ```sh
 rm -rf data/simplified-trajectories data/frechet-distances data/error-matched \
   data/target-simplified data/target-matched data/error-matched-unscaled \
-  data/target-matched-unscaled data/ratio-buckets.json data/plots
+  data/target-matched-unscaled data/size-matched data/ratio-buckets.json data/plots
 ```
 
 **Let a delete finish before anything writes.** Step 7's tree alone is 4.5 million files and
@@ -499,7 +500,7 @@ the trajectory each shard was on. The shard count may change between runs.
 
 - **Summaries:** each implementation at each ε has one per trajectory in the dataset.
 - **Logs:** no `over (1+eps)*delta` line.
-- **Coverage:** in step 11's coverage table, each `<ours> eps=E` cell is the sum of the four
+- **Coverage:** in step 12's coverage table, each `<ours> eps=E` cell is the sum of the four
   baselines in its row.
 
 ```powershell
@@ -605,7 +606,7 @@ done
 rm -r tmp
 ```
 
-Step 11's tables then count 32 fewer pairs for DOTS than for the other three at each level.
+Step 12's tables then count 32 fewer pairs for DOTS than for the other three at each level.
 
 Then ours, one ε at a time:
 
@@ -650,7 +651,7 @@ Both passes resume with `--skip-existing`, as the summary is written last.
 
 **Check before reading the results:** each pass has one summary per trajectory; no log has a
 `results dropped` line (a baseline that did not keep a subsequence) or an `over the target`
-line (ours broke its guarantee); and step 11's tables count `n` the same for each baseline at a
+line (ours broke its guarantee); and step 12's tables count `n` the same for each baseline at a
 level, short trajectories apart.
 
 ## 9 and 10. The same, with ours at δ = the error
@@ -716,14 +717,90 @@ done 2>&1 | tee -a data/error-matched-unscaled/$ours.log
 Step 10 costs what step 8's ours pass does, step 9 what step 7 does. Measured on the corpus with
 24 processes on 24 cores (2026-11-24): step 10 took 1.3 min per ε at 0.5 to 2.1 at 0.05, step
 9 4.6 to 8.9 min. Every result document and summary carries `"delta_rule"`: `d*/(1+eps)` or `d*`
-for steps 7 and 9, `T/(1+eps)` or `T` for 8 and 10; step 11 labels each tree by it.
+for steps 7 and 9, `T/(1+eps)` or `T` for 8 and 10; step 12 labels each tree by it.
 
 **Check:** one summary per trajectory per ε; no `over (1+eps)*delta` line. Step 10's logs say
 `N over the target, which delta = T allows` — that is the point of the step, not a fault (89% of
-its runs). In step 11, `over 2kappa-2` must be 0 for both: here it tests ours against twice the
+its runs). In step 12, `over 2kappa-2` must be 0 for both: here it tests ours against twice the
 baseline, in every pair. On the corpus it is 0 in all 9 041 580 pairs of steps 9 and 10.
 
-## 11. Read the results
+## 11. Fix the size: ours at each baseline's size, compare the error
+
+Steps 7–10 hold the error and compare sizes. This step reads step 6's operating points the
+other way round, the protocol *fix size, compare error* of [comparison.md](comparison.md):
+ours gets **the baseline's own number of vertices**, and the comparison is of error, ours'
+measured Fréchet distance against the baseline's d\*.
+
+**Ours cannot be set by size**, so `ssk_size_match` bisects δ until it fits. For each baseline
+document of step 6, k is its vertex count: ⌈N/2^m⌉, or a point or two under for SQUISH-E and
+DOTS, so ours never gets more than the baseline had. The search keeps a bracket [lo, hi], with
+ours at hi within k vertices and at lo not. It starts at lo = 0, never run, and hi = the
+diagonal of the trajectory's bounding box. Every segment in the box is within that of the
+trajectory, so κ is 2 and ours has 2 vertices; hi doubles if the margin `run` takes off δ ever
+says otherwise. It halves the bracket until hi − lo is 10⁻⁹ of the diagonal, the tolerance
+every distance is measured to, about 31 runs of ours. Ours at hi is then measured as step 7
+measures it, and its bound (1 + ε)·hi is checked exactly.
+
+The search depends on the trajectory and k, not on the baseline, so the budgets of one
+trajectory share a cache of runs. Two baselines at the same size get the same run of ours, and
+budgets a point apart share all of the bisection above the δ where their sizes part.
+**Bisection assumes ours' size never grows with δ, which is not a theorem.** Where it fails, the
+search stops at a boundary, so hi is the top of a bracket, not proven the least δ at which ours
+fits. ε is ours alone and no part of the search; the comparison runs at ε = 0.1.
+
+It needs the build and step 6's `data/frechet-distances/`, and nothing of steps 7–10.
+
+```powershell
+$ours = "greedy-stabbing-shared"
+New-Item -ItemType Directory -Force data\size-matched | Out-Null
+$procs = foreach ($ds in (Get-ChildItem data\trajectories -Directory).Name) {
+  0..7 | ForEach-Object {
+    Start-Process .\build\src\pipelines\size-match\ssk_size_match.exe -NoNewWindow -PassThru `
+      -ArgumentList "--in data\trajectories\$ds --ours $ours --eps 0.1 --shard $_ --shards 8 --skip-existing" `
+      -RedirectStandardOutput "data\size-matched\$ours-$ds-eps0.1-shard$_.log"
+  }
+}
+$procs | Wait-Process
+```
+
+```sh
+ours=greedy-stabbing-shared
+mkdir -p data/size-matched
+for ds in data/trajectories/*/; do
+  seq 0 7 | xargs -P 8 -I{} ./build/src/pipelines/size-match/ssk_size_match \
+    --in "$ds" --ours $ours --eps 0.1 --shard {} --shards 8 --skip-existing
+done 2>&1 | tee -a data/size-matched/$ours.log
+```
+
+**What it writes**, in step 7's layout:
+
+| path | what |
+|---|---|
+| `data/size-matched/<ours>/eps<E>/<algorithm>/<dataset>/m<rate>/<name>.json` | ours at a baseline's size: its points, `params` (the δ found), `stats` (`budget`, `output_size`, `algorithm_runs`), its measured `frechet` with `bound` and `within_bound`, and the baseline document it was fitted to under `matched` |
+| `data/size-matched/<ours>/eps<E>/summary/<dataset>/<name>.json` | ours beside each baseline run, the shape of step 7's summary, `delta_rule` `size` |
+
+It resumes with `--skip-existing`, as the summary is written last. Each shard ends with a line
+like
+
+```
+greedy-stabbing-shared geolife eps=0.1: 778 trajectories -> 14405 fits, 285241 runs of ours, in 785.2 s
+```
+
+**Cost**, measured on the corpus with 24 processes on 24 cores (2026-11-27): **24 minutes**,
+GeoLife 14 of them. 857 456 fits took 16.4 million runs of ours, 19.1 per fit rather than 31,
+as budgets share their searches. On disk it is step 7's shape at one ε: one result per baseline
+document and one summary per trajectory.
+
+**Check before reading the results:** one summary per trajectory; no `over (1+eps)*delta`
+line; ours' `output_size` at most the baseline's in every pair. In step 12, `over 2kappa-2` must
+be 0 here too. `over the baseline's error` is the result, not a fault.
+
+**The precision floor.** In 5 925 pairs the baseline's d\* is within its tolerance, an error of
+0 within measurement (step 7's *precision floor*: dropped repeats, or runs collinear to the
+bit). Ours ends within the two tolerances in 5 839 of them. A ratio of two numbers under the tolerance is noise, so step 12 counts those pairs as
+the same distance, 100%; the other 86 keep their ratio, over 200%.
+
+## 12. Read the results
 
 Everything needed for a table is in the `frechet-distances` tree. A rate-by-algorithm summary
 is a short script over it, and this one is the same on both platforms:
@@ -793,23 +870,25 @@ python scripts\comparison_stats.py --matched data\error-matched-unscaled | Out-F
 python scripts/comparison_stats.py --matched data/error-matched-unscaled > data/error-matched-unscaled/comparison.md
 ```
 
-### Pair by pair, in buckets: all four comparisons
+### Pair by pair, in buckets: all five comparisons
 
-`scripts/ratio_buckets.py` reads the summaries of steps 7–10 and, for every pair, takes two
+`scripts/ratio_buckets.py` reads the summaries of steps 7–11 and, for every pair, takes two
 ratios of ours to the baseline, in percent:
 
 - **size**: ours' vertices over the baseline's. Under 100, ours is smaller.
 - **distance**: ours' measured Fréchet distance over the baseline's. How much of the error the
-  baseline spent ours spent; in step 7 it cannot pass 100 by much, as ours is held to d*.
+  baseline spent ours spent; in step 7 it cannot pass 100 by much, as ours is held to d*. In
+  step 11 it is the result, and the size ratio is at most 100 by construction.
 
 Each is counted into the buckets [0, 10), [10, 20), …, [190, 200) and 200+, separately for every
-(algorithm, level, ε): the level is m for steps 7 and 9 (*fixed-rate*,
-*fixed-rate-unscaled*), f for steps 8 and 10 (*fixed-error*, *fixed-error-unscaled*), each tree
-labelled by its summaries' `delta_rule`. A ratio of exactly 100, the same size, falls in
+(algorithm, level, ε): the level is m for steps 7, 9 and 11 (*fixed-rate*,
+*fixed-rate-unscaled*, *fixed-size*), f for steps 8 and 10 (*fixed-error*,
+*fixed-error-unscaled*), each tree labelled by its summaries' `delta_rule`. A ratio of exactly 100, the same size, falls in
 [100, 110).
 
 It first prints **a check table** per comparison and ε: pairs over ours' bound (1+ε)δ, which
-must be 0; pairs over the baseline's error, 0 in steps 7–8 and nearly all in 9–10; and pairs
+must be 0; pairs over the baseline's error, 0 in steps 7–8, nearly all in 9–10, and in 11
+whatever the comparison found; and pairs
 over Theorem 3's size bound 2κ − 2, which must be 0, κ bounded by the input and by every
 baseline of the same summary within δ.
 
@@ -821,15 +900,37 @@ python scripts\ratio_buckets.py | Out-File -Encoding utf8 data\ratio-buckets.md
 python scripts/ratio_buckets.py > data/ratio-buckets.md
 ```
 
-Then the eight tables pooled over datasets — size and distance, for each comparison — with
+Then the ten tables pooled over datasets — size and distance, for each comparison — with
 each row's `n`, median and share under 100%. `data/ratio-buckets.json` (`--out`) has every
 bucket's count as well as its share, per dataset as well as pooled, and the three check counts.
 
+### Percentiles, one file per experiment
+
+`scripts/ratio_percentiles.py` reads the same summaries with the same ratios and writes
+[docs/tables/](tables/) — `experiment-1-fixed-rate.md` to `experiment-5-fixed-size.md`, one per
+step 7–11. Each has a table per ε and level, a row per baseline, with the p5, p10, p20, …, p90,
+p95, p99 and worst ratio (nearest rank), pooled over the datasets: the size ratio for steps
+7–10, the distance ratio for step 11. Only what is between each file's two markers is
+rewritten; the description, data sources, goal and caveats around them are written by hand.
+Standard library only; about 30 seconds on 24 cores.
+
+```powershell
+python scripts\ratio_percentiles.py
+```
+
+```sh
+python scripts/ratio_percentiles.py
+```
+
 ### Figures
 
-`scripts/plot_results.py` draws every row of those tables as a histogram, 800 of them, and
-eight summary figures that carry the result in fewer pictures: 01–05 for steps 7–8, 06 setting
-them beside 9–10, and 07–08 for 9–10. It is the one script that needs a package, matplotlib,
+`scripts/plot_results.py` draws every row of those tables as a histogram, 840 of them, and
+nine summary figures that carry the result in fewer pictures: 01–05 for steps 7–8, 06 setting
+them beside 9–10, 07–08 for 9–10, and 09 for 11, the median distance ratio by rate. The
+write-up's figures, `data/plots/writeup/01_fixed-rate.pdf` to `05_fixed-size.pdf`, are a
+histogram per step pooled over the levels, of the size ratio for steps 7–10 and of the distance
+ratio for step 11; `06_all-experiments.pdf` puts the five side by side in the text's width, a
+column per step and a row per baseline. It is the one script that needs a package, matplotlib,
 which the venv has; seconds on 24 cores.
 
 ```powershell

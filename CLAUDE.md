@@ -29,13 +29,13 @@ convex-shadow implementations are gone (UPDATES 65): `docs/algorithm.md` and
 |---|---|---|
 | `src/trajio/` | Python. Dataset formats → our format. | Standard library only, so readers run anywhere. Values are copied verbatim — filtering is a modelling decision, not a reader's. |
 | `src/algo/` | C++20 library `ssk`. Reads our format. | No third-party libraries; the build works offline, hence the hand-rolled JSON in `io/json`. `src/algo` is the include root, so headers are `#include "io/..."`. Algorithm tracks land beside `io/`. |
-| `data/` | `downloads/` `trajectories/` `simplified-trajectories/` `frechet-distances/` `error-matched/` `target-simplified/` `target-matched/` `error-matched-unscaled/` `target-matched-unscaled/` `benchmark/` `plots/` | All git-ignored. Gigabytes, and licence-restricted. Commands are committed, data is not. |
+| `data/` | `downloads/` `trajectories/` `simplified-trajectories/` `frechet-distances/` `error-matched/` `target-simplified/` `target-matched/` `error-matched-unscaled/` `target-matched-unscaled/` `size-matched/` `benchmark/` `plots/` | All git-ignored. Gigabytes, and licence-restricted. Commands are committed, data is not. |
 | `tests/` | C++ unit tests. | Own ~60-line harness — GoogleTest via FetchContent would break an offline configure. |
 | `src/algo/frechet/` | Continuous Frechet distance, `Frechet<D>`. | Ported from the GIS Cup 2017 winner (MIT, standard library only), cross-verified against two independent implementations. The decision `within()` is the primitive and is exact; `distance()` bisects it. |
 | `src/algo/simplify/` | `Simplifier<D>` + Douglas-Peucker, SQUISH, SQUISH-E, DOTS, and ours, the greedy stabbers in `greedy_stabber/`. | Ports of the reference implementations, not reinventions — match upstream behaviour and record any deviation in `docs/simplification.md`. **Keep them in upstream's form: no restructuring or clean-up of the ports or of `frechet/`.** Dimension is a template parameter; `simplify()` returns points because a future algorithm may invent them, and `SubsetSimplifier` adds `indices()` for the ones that don't. |
 | `src/algo/geometry/` | Plane geometry for the greedy stabbers: `Vec`, `ConvexPolygon` as unit normals and offsets, cones from a point, clipping, the hull. | The stabbers depend on it and on `GreedyStabber`, never on one another. |
-| `docs/` | `datasets.md`, `trajio.md`, `simplification.md`, `algorithm.md`, `convex-shadow-32.md`, `comparison.md`, `pipeline.md`, `frechet-distance.md`, `references.md`, `running.md`, `benchmark.md`, `results.md` | Measured numbers, not quoted ones. |
-| `src/pipelines/` | Experiment drivers, one directory each: `simplify-sweep` (`ssk_simplify`), `frechet-distance` (`ssk_frechet`), `error-match` (`ssk_match`), `benchmark` (`ssk_bench`), `target-match` (`ssk_target_search`, `ssk_target_match`: step 8, the baselines and ours at fixed error targets). `ssk_match` and `ssk_target_match` take `--unscaled-delta` for steps 9 and 10: ours at δ = the error rather than error/(1+ε). `corpus.{hpp,cpp}` is what they share: file list, sharding, atomic document write. | The algorithms are C++, so the driver is too — a Python one would spawn a process per trajectory. The exception is `scripts/benchmark.py`, which spawns `ssk_bench` once per cell on purpose: a process can be killed at the time limit, a thread cannot. Entry points live with their piece under `src/`, as `trajio` already does. Each keeps its logic in a library beside a thin `main`, so the tests drive it without running the binary. |
+| `docs/` | `datasets.md`, `trajio.md`, `simplification.md`, `algorithm.md`, `convex-shadow-32.md`, `comparison.md`, `pipeline.md`, `frechet-distance.md`, `references.md`, `running.md`, `benchmark.md`, `results.md`, and `tables/`: percentile tables per experiment, from `scripts/ratio_percentiles.py` | Measured numbers, not quoted ones. |
+| `src/pipelines/` | Experiment drivers, one directory each: `simplify-sweep` (`ssk_simplify`), `frechet-distance` (`ssk_frechet`), `error-match` (`ssk_match`), `benchmark` (`ssk_bench`), `target-match` (`ssk_target_search`, `ssk_target_match`: step 8, the baselines and ours at fixed error targets), `size-match` (`ssk_size_match`: step 11, ours bisected on δ to each baseline's size, its error measured). `ssk_match` and `ssk_target_match` take `--unscaled-delta` for steps 9 and 10: ours at δ = the error rather than error/(1+ε). `corpus.{hpp,cpp}` is what they share: file list, sharding, atomic document write. | The algorithms are C++, so the driver is too — a Python one would spawn a process per trajectory. The exception is `scripts/benchmark.py`, which spawns `ssk_bench` once per cell on purpose: a process can be killed at the time limit, a thread cannot. Entry points live with their piece under `src/`, as `trajio` already does. Each keeps its logic in a library beside a thin `main`, so the tests drive it without running the binary. |
 
 **One format everywhere:** `{"dim": 2, "name": "...", "t_unit": "unix_ms", "t": [...],
 "points": [[x, y], ...]}`. trajio writes it, `algo/io` reads it. `t` is
@@ -66,8 +66,10 @@ cmake --build build -j
 .\build\src\pipelines\error-match\ssk_match.exe --in data\trajectories\mopsi --eps 0.5 [--ours NAME] [--unscaled-delta]
 .\build\src\pipelines\target-match\ssk_target_search.exe --in data\trajectories\mopsi [--no-dots]
 .\build\src\pipelines\target-match\ssk_target_match.exe --in data\trajectories\mopsi --eps 0.5 [--ours NAME] [--unscaled-delta]
+.\build\src\pipelines\size-match\ssk_size_match.exe --in data\trajectories\mopsi --eps 0.1 [--ours NAME]
 python scripts\comparison_stats.py --matched data\error-matched
-python scripts\ratio_buckets.py [--error-matched data\error-matched] [--target-matched data\target-matched]
+python scripts\ratio_buckets.py [--error-matched data\error-matched] [--target-matched data\target-matched] [--size-matched data\size-matched]
+python scripts\ratio_percentiles.py [--tables docs\tables]
 python scripts\benchmark.py [--eps 0.5,0.25,0.2,0.1,0.05] [--time-limit 300] [--jobs 8] [--per-dataset 10]
 ```
 
@@ -87,8 +89,10 @@ cmake --build build -j
 ./build/src/pipelines/error-match/ssk_match --in data/trajectories/mopsi --eps 0.5 [--ours NAME] [--unscaled-delta]
 ./build/src/pipelines/target-match/ssk_target_search --in data/trajectories/mopsi [--no-dots]
 ./build/src/pipelines/target-match/ssk_target_match --in data/trajectories/mopsi --eps 0.5 [--ours NAME] [--unscaled-delta]
+./build/src/pipelines/size-match/ssk_size_match --in data/trajectories/mopsi --eps 0.1 [--ours NAME]
 python scripts/comparison_stats.py --matched data/error-matched
-python scripts/ratio_buckets.py [--error-matched data/error-matched] [--target-matched data/target-matched]
+python scripts/ratio_buckets.py [--error-matched data/error-matched] [--target-matched data/target-matched] [--size-matched data/size-matched]
+python scripts/ratio_percentiles.py [--tables docs/tables]
 python scripts/benchmark.py [--eps 0.5,0.25,0.2,0.1,0.05] [--time-limit 300] [--jobs 8] [--per-dataset 10]
 ```
 

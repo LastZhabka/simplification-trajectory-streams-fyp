@@ -185,7 +185,7 @@ What it gives over the first protocol: both sides get the same error budget, rat
 getting the baseline's measured error. Ours stops being matched to an error the baseline
 happened to reach, and the baselines stop being held to a budget they were not designed for.
 Each pair's ratios are bucketed per (algorithm, level, ε) by `scripts/ratio_buckets.py`
-(step 11), the same way for both protocols.
+(step 12), the same way for both protocols.
 
 ## Which δ: inside the error, or at it
 
@@ -219,6 +219,26 @@ times it. And ε acts the other way round. At δ = error/(1 + ε) a smaller ε m
 smaller (against DPn at m2, 94.6% of its size at ε = 0.5, 89.2% at 0.05), as δ comes closer to
 the error; at δ = error a larger ε does (73.5% at 0.5, 86.5% at 0.05), as it buys more error.
 The two meet as ε goes to 0.
+
+## Fixing the size: ours searched to the baseline's size
+
+Steps 7–10 each hold an error and compare sizes. Step 11 of [running.md](running.md) holds the
+size instead: **at the baseline's own number of vertices, whose curve is closer?**
+
+- **The size** is the baseline's at each rate of step 6, its achieved count rather than the
+  target ⌈N/2^m⌉, so SQUISH-E's and DOTS' misses under the budget count against ours, not for
+  it.
+- **Ours is searched**, as the baselines are in step 8: a bisection on δ for the smallest δ
+  found at which ours has at most that many vertices, to 10⁻⁹ of the diagonal, the tolerance of
+  every measured distance. Ours' size is not proven monotone in δ, so like step 8's this is a
+  boundary, not a proven minimum. It costs ours its one-pass property, as the search costs DOTS
+  its own: the numbers describe the simplification, not a streaming run.
+- **ε is fixed at 0.1.** It plays no part in the search, and steps 7–10 show it moves the sizes
+  little.
+
+What it gives over steps 7–10: the error ours needs, not the size it saves. Ours is bicriteria,
+so its error at a size is (1 + ε) times a δ the size bound alone would not reveal, and this
+protocol measures it directly.
 
 ## How each baseline is driven to the budget
 
