@@ -36,16 +36,16 @@ from matplotlib.colors import to_rgb  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.ticker import FixedLocator, FuncFormatter, LogLocator, NullLocator  # noqa: E402
 
-from plot_results import INK, INK_2, MUTED, SURFACE, style  # noqa: E402
+from plot_results import INK, INK_2, MUTED, SURFACE, WRITEUP, WRITEUP_SIZE, style  # noqa: E402
 
 OURS = ("greedy-stabbing-shared", "greedy-stabbing-naive",
         "greedy-stabbing-naive-paper-boundary", "greedy-stabbing-naive-paper",
         "greedy-stabbing-no-decomp", "greedy-stabbing-no-decomp-paper-boundary",
         "greedy-stabbing-no-decomp-paper")
-# The write-up's names: Algorithms 1 and 2, Algorithm 1 on the paper's grid, and each of the three
+# The write-up's names: Algorithms 2 and 3, Algorithm 2 on the paper's grid, and each of the three
 # with the paper's own step, which keeps S[p] as a polygon: Direct-Grid is the paper's algorithm.
-SHORT = {"greedy-stabbing-shared": "Algorithm 2 (shared)",
-         "greedy-stabbing-naive": "Algorithm 1 (naive)",
+SHORT = {"greedy-stabbing-shared": "Algorithm 3 (shared)",
+         "greedy-stabbing-naive": "Algorithm 2 (naive)",
          "greedy-stabbing-naive-paper-boundary": "Paper-Boundary",
          "greedy-stabbing-naive-paper": "Paper-Grid",
          "greedy-stabbing-no-decomp": "Direct-m-gon",
@@ -65,18 +65,9 @@ DASH = (0, (3, 1.6))
 # ordinal step may be on this surface.
 RAMP = ("#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281")
 
-# The write-up's figures: on white, in the text's Computer Modern.
-WRITEUP = {"font.family": "serif", "font.serif": ["cmr10"], "mathtext.fontset": "cm",
-           "axes.formatter.use_mathtext": True, "axes.unicode_minus": False,
-           "font.size": 8, "axes.labelsize": 8, "xtick.labelsize": 7, "ytick.labelsize": 7,
-           "text.color": INK, "axes.labelcolor": INK, "axes.edgecolor": INK_2,
-           "xtick.color": INK_2, "ytick.color": INK_2, "xtick.labelcolor": INK,
-           "ytick.labelcolor": INK, "figure.facecolor": "white", "axes.facecolor": "white",
-           "savefig.facecolor": "white", "axes.grid": False, "pdf.fonttype": 42}
-WRITEUP_SIZE = (3.15, 2.4)
 # The same bottom and top in both, so their x axes line up side by side.
 WRITEUP_FRAME = {"bottom": 0.17, "top": 0.98, "right": 0.97}
-NAME = {"greedy-stabbing-shared": "Algorithm 2", "greedy-stabbing-naive": "Algorithm 1",
+NAME = {"greedy-stabbing-shared": "Algorithm 3", "greedy-stabbing-naive": "Algorithm 2",
         "greedy-stabbing-naive-paper-boundary": "Paper-Boundary",
         "greedy-stabbing-naive-paper": "Paper-Grid",
         "greedy-stabbing-no-decomp": r"Direct-$m$-gon",

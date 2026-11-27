@@ -1,4 +1,4 @@
-"""Figures for step 11 of docs/running.md, from what scripts/ratio_buckets.py wrote.
+"""Figures for step 12 of docs/running.md, from what scripts/ratio_buckets.py wrote.
 
     python scripts/plot_results.py [--buckets data/ratio-buckets.json] [--out data/plots]
                                    [--eps 0.1] [--jobs N]
@@ -17,9 +17,20 @@ The one script that needs a package: matplotlib (the venv has it). Writes
                                    beside delta = error, median size ratio by level
         07_win_tie_loss_unscaled.png  as 01, for steps 9 and 10
         08_median_distance_ratio_unscaled.png  as 05, for steps 9 and 10
+        09_fixed_size_distance.png as 05, for step 11: ours at each baseline's size
+
+  <out>/writeup/
+        01_fixed-rate.pdf ... 05_fixed-size.pdf, and .png
+                                   the write-up's: per step, a row per baseline of the size
+                                   histogram, or for step 11 the distance histogram, the levels
+                                   pooled, in plot_benchmark.py's style
+        06_all-experiments.pdf, and .png
+                                   the five side by side, the text's width: a column per step,
+                                   a row per baseline, each row on one scale
 
 01-05 are steps 7 and 8, where ours is held to the baseline's error; 06-08 appear once steps 9
-and 10 have run. The summary figures are at --eps unless they vary it.
+and 10 have run, 09 once step 11 has. The summary and write-up figures are at --eps unless they
+vary it.
 """
 
 import argparse
@@ -31,6 +42,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.ticker  # noqa: E402
 
 SURFACE = "#fcfcfb"
 INK = "#0b0b0b"
@@ -47,12 +59,26 @@ COMPARISONS = {
     "fixed-error": ("Fixed error (step 8)", "baseline within T = f x diagonal, ours at delta = T/(1+eps)"),
     "fixed-rate-unscaled": ("Fixed rate, delta = d* (step 9)", "as step 7, ours at delta = d*"),
     "fixed-error-unscaled": ("Fixed error, delta = T (step 10)", "as step 8, ours at delta = T"),
+    "fixed-size": ("Fixed size (step 11)", "baseline at N/2^m, ours bisected on delta to its size"),
 }
 MAIN = ("fixed-rate", "fixed-error")
 UNSCALED = ("fixed-rate-unscaled", "fixed-error-unscaled")
 RULE = "#898781"
 REPRESENTATIVE = {"fixed-rate": "m4", "fixed-error": "f0.003"}
 METRICS = {"size": "ours' vertices / baseline's", "distance": "ours' Frechet distance / baseline's"}
+
+# The write-up's figures: on white, in the text's Computer Modern, drawn 3.15 in wide to sit two
+# in a row of a 6.5 in text block. plot_benchmark.py draws its own in the same style.
+WRITEUP = {"font.family": "serif", "font.serif": ["cmr10"], "mathtext.fontset": "cm",
+           "axes.formatter.use_mathtext": True, "axes.unicode_minus": False,
+           "font.size": 8, "axes.labelsize": 8, "xtick.labelsize": 7, "ytick.labelsize": 7,
+           "text.color": INK, "axes.labelcolor": INK, "axes.edgecolor": INK_2,
+           "xtick.color": INK_2, "ytick.color": INK_2, "xtick.labelcolor": INK,
+           "ytick.labelcolor": INK, "figure.facecolor": "white", "axes.facecolor": "white",
+           "savefig.facecolor": "white", "axes.grid": False, "pdf.fonttype": 42}
+WRITEUP_SIZE = (3.15, 2.4)
+# Top down from the baseline nearest ours to the furthest.
+WRITEUP_ORDER = ("douglas-peucker-n", "dots", "squish-e", "squish")
 
 
 def style():
@@ -159,7 +185,9 @@ def win_tie_loss(table, eps, path, comparisons=MAIN, title=None):
 
 
 def lines_by_level(table, eps, metric, path, title, comparisons=MAIN):
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.6), dpi=130)
+    fig, axes = plt.subplots(1, len(comparisons), figsize=(max(6 * len(comparisons), 9), 4.6),
+                             dpi=130, squeeze=False)
+    axes = axes[0]
     for ax, comparison in zip(axes, comparisons):
         levels = levels_of(table, comparison)
         series = {a: [table[(comparison, a, lv, eps)][metric]["median"] for lv in levels]
@@ -185,7 +213,7 @@ def lines_by_level(table, eps, metric, path, title, comparisons=MAIN):
         ax.set_xlim(-0.3, len(levels) - 0.3 + 0.7)
         ax.set_ylim(0, top)
         ax.set_title(COMPARISONS[comparison][0], loc="left", fontsize=11)
-        ax.set_xlabel("compression rate 2^m" if comparison.startswith("fixed-rate")
+        ax.set_xlabel("compression rate 2^m" if not comparison.startswith("fixed-error")
                       else "error target, fraction of the diagonal")
     axes[0].set_ylabel(f"median {METRICS[metric]}, %")
     handles, names = axes[0].get_legend_handles_labels()
@@ -280,6 +308,79 @@ def delta_rule(table, eps, path):
     plt.close(fig)
 
 
+def writeup_bars(ax, table, labels, eps, comparison, algorithm, metric):
+    # The share of the baseline's pairs in each bucket of the ratio, the five levels pooled. The
+    # line is the baseline's own; the grey bucket [100, 110) holds the ties.
+    groups = [g for k, g in table.items()
+              if k[0] == comparison and k[1] == algorithm and k[3] == eps]
+    counts = [sum(g[metric]["buckets"][b] for g in groups) for b in labels]
+    shares = [100.0 * c / sum(counts) for c in counts]
+    ax.bar(range(len(labels)), shares, width=0.8, color=bucket_colors(labels), linewidth=0)
+    ax.axvline(9.5, color=INK_2, linewidth=0.6)
+    ax.set_xlim(-0.6, len(labels) - 0.4)
+    ax.set_ylim(0, None)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(length=2)
+    return max(shares)
+
+
+def writeup_histograms(table, labels, eps, comparison, metric, path):
+    fig, axes = plt.subplots(len(WRITEUP_ORDER), 1, figsize=WRITEUP_SIZE, sharex=True)
+    fig.subplots_adjust(left=0.13, right=0.97, top=0.98, bottom=0.17, hspace=0.2)
+    for ax, algorithm in zip(axes, WRITEUP_ORDER):
+        writeup_bars(ax, table, labels, eps, comparison, algorithm, metric)
+        ax.locator_params(axis="y", nbins=2)
+        ax.text(0.99, 0.92, SHORT[algorithm], transform=ax.transAxes, ha="right", va="top",
+                fontsize=7)
+    axes[-1].set_xticks([-0.5, 4.5, 9.5, 14.5, 19.5])
+    axes[-1].set_xticklabels(["0", "50", "100", "150", "200"])
+    axes[-1].set_xlabel("ours' vertices / baseline's (%)" if metric == "size" else
+                        "ours' distance / baseline's (%)")
+    fig.text(0.015, 0.575, "pairs (%)", rotation=90, va="center", fontsize=8)
+    fig.savefig(path + ".pdf")
+    fig.savefig(path + ".png", dpi=300)
+    plt.close(fig)
+
+
+GRID_TITLES = {"fixed-rate": "1: fixed rate", "fixed-error": "2: fixed error",
+               "fixed-rate-unscaled": "3: rate, $\\delta = d^*$",
+               "fixed-error-unscaled": "4: error, $\\delta = T$", "fixed-size": "5: fixed size"}
+
+
+def writeup_grid(table, labels, eps, path):
+    # All five experiments in the text's width: a column each, a row per baseline, each row on
+    # one scale. The fifth column is a distance ratio, so a gap sets it apart from the four sizes.
+    comparisons = list(GRID_TITLES)
+    fig = plt.figure(figsize=(6.5, 3.9))
+    grid = fig.add_gridspec(len(WRITEUP_ORDER), 6, width_ratios=[1, 1, 1, 1, 0.12, 1],
+                            left=0.075, right=0.99, top=0.93, bottom=0.12, hspace=0.22,
+                            wspace=0.12)
+    for row, algorithm in enumerate(WRITEUP_ORDER):
+        axes, tops = [], []
+        for col, comparison in enumerate(comparisons):
+            ax = fig.add_subplot(grid[row, col if col < 4 else 5])
+            axes.append(ax)
+            tops.append(writeup_bars(ax, table, labels, eps, comparison, algorithm,
+                                     "distance" if comparison == "fixed-size" else "size"))
+            if row == 0:
+                ax.set_title(GRID_TITLES[comparison], fontsize=8)
+            ax.set_xticks([-0.5, 9.5, 19.5])
+            ax.set_xticklabels(["0", "100", "200"])
+            ax.tick_params(labelbottom=row == len(WRITEUP_ORDER) - 1, labelleft=col == 0)
+        for ax in axes:
+            ax.set_ylim(0, 1.05 * max(tops))
+            ax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(2))
+        axes[0].set_ylabel(SHORT[algorithm], fontsize=8)
+    sizes, distance = axes[0].get_position(), axes[4].get_position()
+    fig.text((sizes.x0 + axes[3].get_position().x1) / 2, 0.025,
+             "ours' vertices / other's (%)", ha="center", fontsize=8)
+    fig.text(distance.x1, 0.025, "ours' distance / other's (%)", ha="right", fontsize=8)
+    fig.savefig(path + ".pdf")
+    fig.savefig(path + ".png", dpi=300)
+    plt.close(fig)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--buckets", default="data/ratio-buckets.json")
@@ -326,7 +427,24 @@ def main():
                        os.path.join(summary, "08_median_distance_ratio_unscaled.png"),
                        "With delta = d* or T: median Frechet distance of ours against each "
                        "baseline, eps {eps:g}", UNSCALED)
+    if any(k[0] == "fixed-size" for k in table):
+        lines_by_level(table, args.eps, "distance",
+                       os.path.join(summary, "09_fixed_size_distance.png"),
+                       "At the baseline's size: median distance of ours, eps {eps:g}",
+                       ("fixed-size",))
     print(f"wrote the summary figures under {summary}")
+
+    writeup = os.path.join(args.out, "writeup")
+    os.makedirs(writeup, exist_ok=True)
+    with plt.rc_context(WRITEUP):
+        for k, comparison in enumerate(COMPARISONS, 1):
+            if any(key[0] == comparison for key in table):
+                writeup_histograms(table, labels, args.eps, comparison,
+                                   "distance" if comparison == "fixed-size" else "size",
+                                   os.path.join(writeup, f"{k:02d}_{comparison}"))
+        if all(any(key[0] == c for key in table) for c in GRID_TITLES):
+            writeup_grid(table, labels, args.eps, os.path.join(writeup, "06_all-experiments"))
+    print(f"wrote the write-up figures under {writeup}")
 
 
 if __name__ == "__main__":

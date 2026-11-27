@@ -1,13 +1,14 @@
-"""How ours compares with each baseline, pair by pair, as histograms of ratios -- step 11 of
+"""How ours compares with each baseline, pair by pair, as histograms of ratios -- step 12 of
 docs/running.md.
 
     python scripts/ratio_buckets.py [--error-matched data/error-matched]
                                     [--target-matched data/target-matched]
                                     [--error-matched-unscaled data/error-matched-unscaled]
                                     [--target-matched-unscaled data/target-matched-unscaled]
+                                    [--size-matched data/size-matched]
                                     [--out data/ratio-buckets.json] [--jobs N]
 
-Four comparisons, each read from the per-trajectory summaries its step wrote:
+Five comparisons, each read from the per-trajectory summaries its step wrote:
 
   fixed-rate             step 7: a baseline at N / 2^m vertices, ours at delta = d*/(1+eps),
                          within the baseline's measured error d*. Keyed by m.
@@ -15,18 +16,22 @@ Four comparisons, each read from the per-trajectory summaries its step wrote:
                          T = f * diagonal, ours at delta = T/(1+eps), within T. Keyed by f.
   fixed-rate-unscaled    step 9: as step 7 with ours at delta = d*, within (1+eps) d*.
   fixed-error-unscaled   step 10: as step 8 with ours at delta = T, within (1+eps) T.
+  fixed-size             step 11: a baseline at N / 2^m vertices, ours at the delta a bisection
+                         found it to fit in the baseline's own size. Keyed by m. Here the
+                         distance ratio is the result, and the size ratio at most 100.
 
 The comparison is taken from the summary's `delta_rule`, so a tree in the wrong place is
 labelled by what it is. For every pair, two ratios, as percentages of the baseline's:
 
   size          ours' vertices / the baseline's vertices * 100. Under 100: ours is smaller.
   distance      ours' measured Frechet distance / the baseline's * 100: how much of the error
-                the baseline spent ours spent.
+                the baseline spent ours spent. Where the baseline is within its tolerance,
+                at 0 within measurement, and ours within the two tolerances, it is 100.
 
 each counted into the buckets [0, 10), [10, 20), ..., [190, 200), [200, inf), separately for
 every (algorithm, level, eps) and implementation of ours, pooled over the datasets and per
 dataset. Each group also counts the pairs over ours' error bound (1+eps)*delta, over the
-baseline's error (step 10 allows it), and over Theorem 3's size bound 2*kappa - 2, kappa bounded
+baseline's error (steps 9-11 allow it), and over Theorem 3's size bound 2*kappa - 2, kappa bounded
 by the input and by every baseline in the same summary within delta. Prints the pooled tables
 as Markdown; writes all of it to --out.
 """
@@ -42,11 +47,12 @@ from statistics import median
 EDGES = list(range(0, 201, 10))
 LABELS = [f"{a}-{a + 10}" for a in EDGES[:-1]] + ["200+"]
 COMPARISONS = {"fixed-rate": "m", "fixed-error": "level", "fixed-rate-unscaled": "m",
-               "fixed-error-unscaled": "level"}
+               "fixed-error-unscaled": "level", "fixed-size": "m"}
 WHAT = {"fixed-rate": "step 7: baseline at N/2^m, ours at delta = d*/(1+eps)",
         "fixed-error": "step 8: baseline within T = f * diagonal, ours at delta = T/(1+eps)",
         "fixed-rate-unscaled": "step 9: as step 7, ours at delta = d*",
-        "fixed-error-unscaled": "step 10: as step 8, ours at delta = T"}
+        "fixed-error-unscaled": "step 10: as step 8, ours at delta = T",
+        "fixed-size": "step 11: baseline at N/2^m, ours bisected on delta to its size"}
 UNSCALED = {"d*", "T"}
 SHORT = {"douglas-peucker-n": "DPn", "squish": "SQUISH", "squish-e": "SQUISH-E", "dots": "DOTS"}
 ALGORITHMS = tuple(SHORT)
@@ -62,12 +68,22 @@ def ratio(ours, baseline):
     return 100.0 if ours == 0 else float("inf")
 
 
+def distance_ratio(ours, base):
+    # A baseline within its tolerance is at 0 within measurement, and a ratio of two numbers under
+    # the tolerance is noise: ours within the two tolerances is the same error.
+    if base["distance"] <= base["tolerance"] and \
+            ours["distance"] <= ours["tolerance"] + base["tolerance"]:
+        return 100.0
+    return ratio(ours["distance"], base["distance"])
+
+
 def read(args):
     shape, path = args
     with open(path, encoding="utf-8") as f:
         doc = json.load(f)
-    comparison = ("fixed-rate" if shape == "m" else "fixed-error") + \
-        ("-unscaled" if doc.get("delta_rule") in UNSCALED else "")
+    rule = doc.get("delta_rule")
+    comparison = "fixed-size" if rule == "size" else \
+        ("fixed-rate" if shape == "m" else "fixed-error") + ("-unscaled" if rule in UNSCALED else "")
     rows = []
     for p in doc["pairs"]:
         ours, base = p["ours"], p["baseline"]
@@ -78,7 +94,7 @@ def read(args):
         error = base["distance"] if shape == "m" else p["target"]
         rows.append((comparison, doc["ours"], p["algorithm"], level, doc["eps"], doc["dataset"],
                      ratio(ours["output_size"], base["output_size"]),
-                     ratio(ours["distance"], base["distance"]),
+                     distance_ratio(ours, base),
                      not ours["within_bound"],
                      not ours.get("within_target", ours["distance"] - ours["tolerance"] <= error),
                      ours["output_size"] > 2 * max(kappa, 2) - 2))
@@ -144,17 +160,19 @@ def main():
     ap.add_argument("--target-matched", default="data/target-matched")
     ap.add_argument("--error-matched-unscaled", default="data/error-matched-unscaled")
     ap.add_argument("--target-matched-unscaled", default="data/target-matched-unscaled")
+    ap.add_argument("--size-matched", default="data/size-matched")
     ap.add_argument("--out", default="data/ratio-buckets.json")
     ap.add_argument("--jobs", type=int, default=os.cpu_count())
     args = ap.parse_args()
 
     paths = []
     for shape, root in (("m", args.error_matched), ("level", args.target_matched),
-                        ("m", args.error_matched_unscaled), ("level", args.target_matched_unscaled)):
+                        ("m", args.error_matched_unscaled), ("level", args.target_matched_unscaled),
+                        ("m", args.size_matched)):
         paths += [(shape, p) for p in glob.glob(os.path.join(root, "*", "eps*", "summary", "*",
                                                              "*.json"))]
     if not paths:
-        raise SystemExit("no summaries found: run steps 7 to 10 first")
+        raise SystemExit("no summaries found: run steps 7 to 11 first")
 
     values = defaultdict(lambda: {"size": [], "distance": [],
                                   "counts": {"over_bound": 0, "over_error": 0, "over_size": 0}})
