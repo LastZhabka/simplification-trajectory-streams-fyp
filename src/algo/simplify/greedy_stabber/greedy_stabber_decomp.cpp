@@ -6,7 +6,6 @@
 #include <limits>
 #include <numbers>
 #include <optional>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -61,19 +60,19 @@ class NaiveStabber : public GreedyStabber<NaiveCandidate> {
     starts_ = start_points(delta, eps);
   }
 
-  std::vector<NaiveCandidate> start(Vec v) override {
+  std::vector<NaiveCandidate> start(double scale) override {
     std::vector<NaiveCandidate> out;
     for (const Vec o : starts_) {
-      out.push_back({v + o, Wedge{},
+      out.push_back({o * scale, Wedge{},
                      std::vector<double>(region_.normals.size(),
                                          std::numeric_limits<double>::infinity())});
     }
     return out;
   }
 
-  std::vector<NaiveCandidate> advance(const std::vector<NaiveCandidate>& cands,
-                                      std::span<const Vec>, Vec v) override {
-    const ConvexPolygon at = translated(region_, v);
+  std::vector<NaiveCandidate> advance(const std::vector<NaiveCandidate>& cands, Vec v,
+                                      double scale) override {
+    const ConvexPolygon at = placed(region_, scale, v);
     std::vector<NaiveCandidate> out;
     for (const NaiveCandidate& c : cands) {
       NaiveCandidate next = c;
@@ -94,13 +93,13 @@ class NaiveStabber : public GreedyStabber<NaiveCandidate> {
     return out;
   }
 
-  void emit_segment(Curve<2>& out, std::span<const Vec> stabbed) override {
-    const ConvexPolygon at = translated(region_, stabbed.back());
+  void emit_segment(Curve<2>& out, Vec last, double scale) override {
+    const ConvexPolygon at = placed(region_, scale, last);
     for (const NaiveCandidate& c : candidates_) {
       const Polygon s = shadow(c.p, c.wedge, c.offsets, at);
       if (!s.empty()) {
         emit(out, c.p);
-        emit(out, closest(s, stabbed.back()));
+        emit(out, closest(s, last));
         return;
       }
     }
@@ -143,21 +142,21 @@ class SharedStabber final : public GreedyStabber<SharedCandidate> {
     starts_ = circle(delta, eps);
   }
 
-  std::vector<SharedCandidate> start(Vec v) override {
-    center_ = v;
+  std::vector<SharedCandidate> start(double scale) override {
+    scale_ = scale;
     strictest_.assign(region_.normals.size(), std::numeric_limits<double>::infinity());
     std::vector<SharedCandidate> out;
     for (std::size_t s = 0; s < starts_.size(); ++s) {
-      out.push_back({s, v + starts_[s], Wedge{}});
+      out.push_back({s, starts_[s] * scale, Wedge{}});
     }
     return out;
   }
 
   // Between two marked starts the sides a start is beyond are the same, so are Q[p] and its two
   // corners: they are built at the first start after a mark and kept until the next.
-  std::vector<SharedCandidate> advance(const std::vector<SharedCandidate>& cands,
-                                       std::span<const Vec>, Vec v) override {
-    const ConvexPolygon at = translated(region_, v);
+  std::vector<SharedCandidate> advance(const std::vector<SharedCandidate>& cands, Vec v,
+                                       double scale) override {
+    const ConvexPolygon at = placed(region_, scale, v);
     std::vector<double> strictest(at.offsets.size());
     for (std::size_t k = 0; k < at.offsets.size(); ++k) {
       strictest[k] = std::min(strictest_[k], at.offsets[k]);
@@ -188,13 +187,13 @@ class SharedStabber final : public GreedyStabber<SharedCandidate> {
     return out;
   }
 
-  void emit_segment(Curve<2>& out, std::span<const Vec> stabbed) override {
-    const ConvexPolygon at = translated(region_, stabbed.back());
+  void emit_segment(Curve<2>& out, Vec last, double scale) override {
+    const ConvexPolygon at = placed(region_, scale, last);
     for (const SharedCandidate& c : candidates_) {
       const Polygon s = shadow(c.p, c.wedge, strictest_, at);
       if (!s.empty()) {
         emit(out, c.p);
-        emit(out, closest(s, stabbed.back()));
+        emit(out, closest(s, last));
         return;
       }
     }
@@ -217,12 +216,12 @@ class SharedStabber final : public GreedyStabber<SharedCandidate> {
     std::vector<bool> marked(starts_.size(), false);
     for (std::size_t k = 0; k < strictest.size(); ++k) {
       const Vec n = region_.normals[k];
-      const double t = (strictest[k] - dot(n, center_)) / delta_;
+      const double t = strictest[k] / (delta_ * scale_);
       if (std::abs(t) > 1.0 + 1e-9) {
         continue;
       }
       const auto beyond = [&](long long s) {
-        return dot(n, center_ + starts_[wrap(s)]) > strictest[k];
+        return dot(n, starts_[wrap(s)] * scale_) > strictest[k];
       };
       const double half = std::acos(std::clamp(t, -1.0, 1.0));
       for (const double angle : {std::atan2(n.y, n.x) - half, std::atan2(n.y, n.x) + half}) {
@@ -243,7 +242,7 @@ class SharedStabber final : public GreedyStabber<SharedCandidate> {
   double delta_ = 0.0;
   ConvexPolygon region_;
   std::vector<Vec> starts_;
-  Vec center_;
+  double scale_ = 1.0;
   std::vector<double> strictest_;
 };
 

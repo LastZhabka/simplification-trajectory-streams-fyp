@@ -6,7 +6,6 @@
 #include <limits>
 #include <numeric>
 #include <optional>
-#include <span>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -320,18 +319,18 @@ class NoDecompStabber : public GreedyStabber<Candidate> {
   }
 
   // S[p] = {p}: a shadow with no sides, none of which faces p, so its first step is the region.
-  std::vector<Candidate> start(Vec v) override {
+  std::vector<Candidate> start(double scale) override {
     std::vector<Candidate> out;
     for (const Vec o : starts_) {
-      out.push_back({v + o, {}, false});
+      out.push_back({o * scale, {}, false});
     }
     return out;
   }
 
   // Every region lies within (1 + eps) delta of its vertex, so the box at twice that bounds every
   // shadow, and none of its sides bounds one.
-  std::vector<Candidate> advance(const std::vector<Candidate>& cands, std::span<const Vec>,
-                                 Vec v) override {
+  std::vector<Candidate> advance(const std::vector<Candidate>& cands, Vec v,
+                                 double scale) override {
     Around around{{{{1.0, 0.0}, v.x + reach_},
                    {{-1.0, 0.0}, reach_ - v.x},
                    {{0.0, 1.0}, v.y + reach_},
@@ -341,7 +340,7 @@ class NoDecompStabber : public GreedyStabber<Candidate> {
                   reach_,
                   16.0 * std::numeric_limits<double>::epsilon() *
                       (std::abs(v.x) + std::abs(v.y) + reach_)};
-    const ConvexPolygon a = translated(region_, v);
+    const ConvexPolygon a = placed(region_, scale, v);
     for (std::size_t k = 0; k < a.normals.size(); ++k) {
       around.h.push_back({a.normals[k], a.offsets[k]});
     }
@@ -356,11 +355,11 @@ class NoDecompStabber : public GreedyStabber<Candidate> {
     return out;
   }
 
-  void emit_segment(Curve<2>& out, std::span<const Vec> stabbed) override {
+  void emit_segment(Curve<2>& out, Vec last, double) override {
     for (const Candidate& c : candidates_) {
       if (!c.shadow.empty()) {
         emit(out, c.p);
-        emit(out, closest(corners(c.shadow), stabbed.back()));
+        emit(out, closest(corners(c.shadow), last));
         return;
       }
     }

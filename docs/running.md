@@ -448,12 +448,16 @@ check the result documents (`within_bound` in each summary) as well as the logs.
 **The precision floor.** A baseline whose error d* equals its measurement tolerance has error 0
 within measurement: on Mopsi and NGSIM a budget can drop exact repeats, and on NGSIM runs of
 fixes collinear to the bit, at no error at all. Ours is then asked for δ = d*/(1+ε) (step 7)
-or d* (step 9): a few ulps of the coordinates. `GreedyStabber::run` aims inside δ by what its
-arithmetic can err. It computes relative to the first vertex, erring by ulps of the extent, and
-only writing a point back rounds by half an ulp of the absolute coordinates, so the margin is
-`DBL_EPSILON · (max|coord| + 2δ) + 64 · DBL_EPSILON · extent`: 1.4·10⁻⁹ ft on NGSIM,
-1.4·10⁻¹⁴ degrees on Mopsi. At or under it no new point can be written within δ, and `run`
-drops the exact repeats, which is exact, and keeps every other point.
+or d* (step 9): a few ulps of the coordinates. `GreedyStabber::run` builds each vertex's region
+for δ less what its arithmetic can err there, from what has arrived, as a stream must. Each run
+computes relative to its own first vertex o, so at a vertex T the margin is
+`Δ = DBL_EPSILON · (‖o‖∞ + 2δ + 64 ‖T − o‖∞)`: writing p and q back rounds by ulps of the
+absolute coordinates, and every step errs by ulps of how far T is from o. 64 is a safety factor.
+The regions keep their normals, so only the offsets scale, and a run's starts are built for
+δ − Δ at o. On NGSIM near the floor Δ is 1.4·10⁻⁹ ft. Where Δ ≥ δ no new point can be written
+within δ of T, and `run` outputs T itself, dropping exact repeats, which is exact. Until
+2026-11-27 the margin was the whole curve's, from its largest coordinate and its extent, which a
+stream cannot know.
 
 Fixed twice on 2026-11-24:
 

@@ -82,9 +82,11 @@ TEST("greedy-stabbing/a spike to where two corners meet stays within (1 + eps) *
   }
 }
 
-// The same spike far from the first vertex, its gap just over run()'s precision margin, which
-// is ulps of that distance. The shadow is then a few ulps of its coordinates wide, closest()
-// skipped every edge of it, and A was emitted, a delta from B: 1.72 delta against 1.5.
+// The same spike far from the first vertex, its gap just over run()'s precision margin. With the
+// margin taken from the whole curve the shadow was a few ulps of its coordinates wide, closest()
+// skipped every edge of it, and A was emitted, a delta from B: 1.72 delta against 1.5. The margin
+// is now each vertex's, ulps of |o| + 2 delta + 64 |v - o| for the run's first vertex o, here the
+// vertex before the spike.
 TEST("greedy-stabbing/the spike far from the first vertex, just over the margin, keeps the bound") {
   const ssk::frechet::Frechet<2> frechet;
   const double pi = std::acos(-1.0);
@@ -92,7 +94,7 @@ TEST("greedy-stabbing/the spike far from the first vertex, just over the margin,
   for (const auto& [eps, corner] : {std::pair{0.5, -pi / 2}, std::pair{0.2, pi / 8}}) {
     for (const double far : {1e2, 1e4, 1e6}) {
       for (const double over : {1.01, 1.1, 1.3, 1.5}) {
-        const double gap = over * ulp * (65.0 * far + 6.0);
+        const double gap = over * ulp * (far + 2.0 + 64.0 * (1.0 + eps));
         const double r = 2.0 * (1.0 + eps) * (1.0 - gap);
         const double x = far - 10.0;
         const Curve<2> spike{{0, 0},  {far - 20.0, 0},
@@ -335,8 +337,8 @@ TEST("greedy-stabbing/a simplifier run on one curve and another gives the first 
   }
 }
 
-// run() works relative to the first vertex, which for integer coordinates is exact, so moving the
-// curve moves the output, but for the precision margin, which grows with the coordinates.
+// run() works relative to each run's first vertex, which for integer coordinates is exact, so moving
+// the curve moves the output, but for the precision margin, which grows with the coordinates.
 TEST("greedy-stabbing/moving an integer curve by whole units moves the output with it") {
   std::mt19937 rng(113);
   const Curve<2> here = lattice_walk(rng, 70);
@@ -356,6 +358,123 @@ TEST("greedy-stabbing/moving an integer curve by whole units moves the output wi
     }
     CHECK_MSG(moved, s->name() + ": " + std::to_string(a.size()) + " and " +
                          std::to_string(b.size()) + " vertices");
+  }
+}
+
+// A stream does not know what comes next, so nothing emitted may depend on it. The margin was
+// taken from the whole curve's largest coordinate and extent, and a suffix far away moved every
+// vertex before it. Only the last run, which the prefix ends early, may differ.
+TEST("greedy-stabbing/what is emitted for a prefix does not depend on what follows it") {
+  std::mt19937 rng(127);
+  const Curve<2> prefix = lattice_walk(rng, 60);
+  Curve<2> whole = prefix;
+  for (const auto& p : lattice_walk(rng, 40)) {
+    whole.push_back({p[0] + 3.0e6, p[1] - 1.0e6});
+  }
+  for (const auto& s : stabbers({{"delta", 0.61}, {"eps", 0.3}})) {
+    const Curve<2> a = s->simplify(prefix);
+    const Curve<2> b = s->simplify(whole);
+    const std::size_t settled = a.size() - 2;
+    CHECK_MSG(b.size() >= settled && std::equal(a.begin(), a.begin() + settled, b.begin()),
+              s->name() + ": " + std::to_string(a.size()) + " and " + std::to_string(b.size()) +
+                  " vertices");
+  }
+}
+
+// A run is worked out relative to its first vertex, so the margin grows along it with how far the
+// vertex is from there, 64 ulps of it. At the end of a line 10 long that is 1.4e-13, so at delta
+// 1e-9 the line is still one segment.
+TEST("greedy-stabbing/the margin grows along a run, and a long line is still one segment") {
+  const ssk::frechet::Frechet<2> frechet;
+  Curve<2> line;
+  for (int i = 0; i <= 1000; ++i) {
+    line.push_back({0.01 * i, 0.0});
+  }
+  const double delta = 1e-9;
+  for (const double eps : {0.5, 0.1}) {
+    for (const auto& s : stabbers({{"delta", delta}, {"eps", eps}})) {
+      const Curve<2> out = s->simplify(line);
+      CHECK_MSG(out.size() == 2, s->name() + ": " + std::to_string(out.size()) + " vertices");
+      CHECK_MSG(frechet.within(line, out, (1.0 + eps) * delta),
+                s->name() + " at eps " + std::to_string(eps));
+    }
+  }
+}
+
+// At delta 1e-12 a vertex 100 from its run's first one has a margin of 64 ulps of 100, more than
+// delta: no point fits within delta of it in that run, so it is output itself, and the run before
+// it is one vertex, which a no-decomp stabber, emitting from a shadow, cannot end. So the curve
+// comes back whole.
+TEST("greedy-stabbing/a vertex whose margin is delta or more is output itself") {
+  const Curve<2> steps{{0, 0}, {100, 0}, {200, 0}, {200, 100}};
+  for (const auto& s : stabbers({{"delta", 1e-12}, {"eps", 0.5}})) {
+    CHECK_MSG(s->simplify(steps) == steps, s->name());
+  }
+}
+
+// A run is written back from its own first vertex, so a last run of one vertex, after a turn back
+// no segment can follow, is that vertex to the bit; from the curve's first it was q - o + o.
+TEST("greedy-stabbing/a last run of one vertex ends the output on that vertex exactly") {
+  const Curve<2> jump{{0.1, 0.7}, {10.1, 0.7}, {20.1, 0.7}, {-0.3, -0.3}};
+  for (const auto& s : stabbers({{"delta", 0.05}, {"eps", 0.3}})) {
+    const Curve<2> out = s->simplify(jump);
+    CHECK_MSG(out.back() == jump.back(), s->name());
+  }
+}
+
+// The margin grows with the coordinates of a run's first vertex. Past what delta resolves no point
+// fits within delta of a vertex, so from there each vertex is output itself, while the line before
+// them, near the origin, is still one segment: the margin of the whole curve kept all 70.
+TEST("greedy-stabbing/where a stream's coordinates outgrow delta it keeps its vertices from there") {
+  const ssk::frechet::Frechet<2> frechet;
+  Curve<2> curve;
+  for (int i = 0; i < 50; ++i) {
+    curve.push_back({0.5 * i, 0.25 * i});
+  }
+  for (int i = 0; i < 20; ++i) {
+    curve.push_back({1e9 + 3.0 * i, 1e9 - 2.0 * (i % 3)});
+  }
+  const double delta = 1e-7;
+  for (const double eps : {0.5, 0.1}) {
+    for (const auto& s : stabbers({{"delta", delta}, {"eps", eps}})) {
+      const Curve<2> out = s->simplify(curve);
+      CHECK_MSG(out.size() == 2 + 20, s->name() + " at eps " + std::to_string(eps) + ": " +
+                                          std::to_string(out.size()) + " vertices");
+      CHECK_MSG(std::equal(curve.end() - 20, curve.end(), out.end() - 20), s->name());
+      CHECK_MSG(frechet.within(curve, out, (1.0 + eps) * delta),
+                s->name() + " at eps " + std::to_string(eps));
+    }
+  }
+}
+
+// A spiral out from 1 to 2^20: the margin grows with the coordinates, so the regions shrink from
+// vertex to vertex and the starts from run to run. Every stabber must take them alike: the bound
+// holds, shared is naive to the bit, and each no-decomp one is its naive twin.
+TEST("greedy-stabbing/a stream that moves out over many binades keeps every guarantee") {
+  const ssk::frechet::Frechet<2> frechet;
+  Curve<2> spiral;
+  for (int i = 0; i < 200; ++i) {
+    const double r = std::exp2(i / 10.0);
+    spiral.push_back({r * std::cos(0.7 * i), r * std::sin(0.7 * i)});
+  }
+  const double delta = 0.3;
+  const double eps = 0.5;
+  const auto all = stabbers({{"delta", delta}, {"eps", eps}});
+  std::vector<Curve<2>> out;
+  for (const auto& s : all) {
+    out.push_back(s->simplify(spiral));
+    CHECK_MSG(frechet.within(spiral, out.back(), (1.0 + eps) * delta), s->name());
+  }
+  CHECK(out[3] == out[0]);
+  for (const auto& [twin, no_decomp] : {std::pair{0, 4}, std::pair{1, 5}, std::pair{2, 6}}) {
+    const Curve<2>& a = out[static_cast<std::size_t>(twin)];
+    const Curve<2>& b = out[static_cast<std::size_t>(no_decomp)];
+    bool close = a.size() == b.size();
+    for (std::size_t i = 0; close && i < a.size(); ++i) {
+      close = std::hypot(a[i][0] - b[i][0], a[i][1] - b[i][1]) <= 1e-9 * delta;
+    }
+    CHECK_MSG(close, all[static_cast<std::size_t>(no_decomp)]->name() + ": " +
+                         std::to_string(a.size()) + " and " + std::to_string(b.size()));
   }
 }
 

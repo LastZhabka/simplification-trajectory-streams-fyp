@@ -112,4 +112,12 @@ std::vector<Vec> grid_points(double delta, double eps, bool boundary) {
   return scaled(grid(eps, boundary), cell_side(delta, eps));
 }
 
+geometry::ConvexPolygon placed(const geometry::ConvexPolygon& region, double scale, Vec v) {
+  geometry::ConvexPolygon out = region;
+  for (double& b : out.offsets) {
+    b *= scale;
+  }
+  return geometry::translated(out, v);
+}
+
 }  // namespace ssk::simplify

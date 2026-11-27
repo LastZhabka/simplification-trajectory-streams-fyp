@@ -532,9 +532,9 @@ Where a vertex repeats, a side of `S[p]` is a side of `A_v`. Where a start of th
 side of `A_v`, its tangent runs along that side, off by the 1e-15 or so the tangent's direction
 carries from two points a few units apart. Kept apart, the program asked for the sign of a
 rounding error, and two consecutive sides met at a corner far off: in one run the "intersection"
-was larger than `A_v`. 16 ulps is within the margin `run()` leaves inside δ, 64 ulps of the
-extent. The tangents' normals are unit, so the test compares like with like. Comparing only the
-normals, to a few ulps, missed the tangent off by 2e-15.
+was larger than `A_v`. 16 ulps is within the margin `run()` leaves inside δ, 64 ulps of how
+far the vertex is from its run's first one. The tangents' normals are unit, so the test compares
+like with like. Comparing only the normals, to a few ulps, missed the tangent off by 2e-15.
 
 **Corners of sides all but parallel.** Two consecutive sides of a shadow can meet at an angle of
 1e-13. The two tangents from a start a few ulps beyond a side both run along it. Their corner
