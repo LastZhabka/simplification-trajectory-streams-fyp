@@ -1,13 +1,13 @@
-"""Percentiles of the ratios of ours to each baseline, one Markdown file per experiment -- step 12
+"""Percentiles of the ratios of ours to each baseline, one Markdown file per experiment -- step 10
 of docs/running.md.
 
     python scripts/ratio_percentiles.py [--data data] [--ours greedy-stabbing-shared]
                                         [--tables docs/tables] [--jobs N]
 
-Reads the summaries of steps 7-11, with the ratios of scripts/ratio_buckets.py, and writes into
-<tables>/experiment-<k>-<comparison>.md, between its two markers, a table for every eps and level:
+Reads the summaries of steps 7-9, with the ratios of scripts/ratio_buckets.py, and writes into
+<tables>/experiment-<k>-<comparison>.md, between its two markers, a table for every eps and m:
 a row per baseline, the p5 ... p99 and the largest ratio over its pairs, pooled over the datasets.
-The size ratio for experiments 1-4, the distance ratio for experiment 5. A percentile is the
+The size ratio for experiments 1 and 2, the distance ratio for experiment 3. A percentile is the
 nearest rank: pK is the smallest ratio with at least K% of the pairs at or below it. The prose
 around the markers is written by hand and kept.
 """
@@ -23,12 +23,9 @@ from concurrent.futures import ProcessPoolExecutor
 from ratio_buckets import read
 
 EXPERIMENTS = {"fixed-rate": ("experiment-1-fixed-rate.md", "size"),
-               "fixed-error": ("experiment-2-fixed-error.md", "size"),
-               "fixed-rate-unscaled": ("experiment-3-fixed-rate-unscaled.md", "size"),
-               "fixed-error-unscaled": ("experiment-4-fixed-error-unscaled.md", "size"),
-               "fixed-size": ("experiment-5-fixed-size.md", "distance")}
-TREES = (("m", "error-matched"), ("level", "target-matched"), ("m", "error-matched-unscaled"),
-         ("level", "target-matched-unscaled"), ("m", "size-matched"))
+               "fixed-rate-unscaled": ("experiment-2-fixed-rate-unscaled.md", "size"),
+               "fixed-size": ("experiment-3-fixed-size.md", "distance")}
+TREES = ("error-matched", "error-matched-unscaled", "size-matched")
 PERCENTILES = (5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99)
 ORDER = ("douglas-peucker-n", "dots", "squish-e", "squish")
 NAMES = {"douglas-peucker-n": "Douglas–Peucker (DPn)", "dots": "DOTS", "squish-e": "SQUISH-E",
@@ -50,7 +47,7 @@ def count(n):
 
 
 def level_name(level):
-    return ("m = " if level.startswith("m") else "f = ") + level[1:]
+    return "m = " + level[1:]
 
 
 def block(values, comparison):
@@ -91,9 +88,9 @@ def main():
     args = ap.parse_args()
 
     paths = []
-    for shape, tree in TREES:
-        paths += [(shape, p) for p in glob.glob(os.path.join(args.data, tree, args.ours, "eps*",
-                                                             "summary", "*", "*.json"))]
+    for tree in TREES:
+        paths += glob.glob(os.path.join(args.data, tree, args.ours, "eps*", "summary", "*",
+                                        "*.json"))
     values = defaultdict(lambda: array("d"))
     with ProcessPoolExecutor(args.jobs) as pool:
         for rows in pool.map(read, paths, chunksize=256):

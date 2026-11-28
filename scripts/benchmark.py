@@ -33,20 +33,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from statistics import median
 
 OURS = ("greedy-stabbing-shared", "greedy-stabbing-naive",
-        "greedy-stabbing-naive-paper-boundary", "greedy-stabbing-naive-paper",
-        "greedy-stabbing-no-decomp", "greedy-stabbing-no-decomp-paper-boundary",
-        "greedy-stabbing-no-decomp-paper")
+        "greedy-stabbing-naive-paper-boundary", "greedy-stabbing-naive-paper")
 SHORT = {"greedy-stabbing-shared": "shared", "greedy-stabbing-naive": "naive",
          "greedy-stabbing-naive-paper-boundary": "paper-boundary",
-         "greedy-stabbing-naive-paper": "paper",
-         "greedy-stabbing-no-decomp": "no-decomp",
-         "greedy-stabbing-no-decomp-paper-boundary": "no-decomp-paper-boundary",
-         "greedy-stabbing-no-decomp-paper": "no-decomp-paper"}
+         "greedy-stabbing-naive-paper": "paper"}
 SHARED = OURS[0]
-# Each no-decomp stabber has the region and starts of a naive one, which it should agree with.
-TWIN = {"greedy-stabbing-no-decomp": "greedy-stabbing-naive",
-        "greedy-stabbing-no-decomp-paper-boundary": "greedy-stabbing-naive-paper-boundary",
-        "greedy-stabbing-no-decomp-paper": "greedy-stabbing-naive-paper"}
 # Below this the shared stabber takes microseconds, which measures the timer.
 MIN_POINTS = 500
 # The long tail, beside the sample: the largest trajectory, and the one at the 99th percentile.
@@ -252,12 +243,6 @@ def report(cells, limit, eps_list):
     same = sum(g[OURS[0]]["digest"] == g[OURS[1]]["digest"] for g in agree)
     lines.append(f"\nshared and naive output identical to the bit in {same} of {len(agree)} "
                  "cells where both finished.")
-    for o, twin in TWIN.items():
-        agree = [g for g in by.values() if g[o]["status"] == "ok" and g[twin]["status"] == "ok"]
-        size = sum(g[o]["output_size"] == g[twin]["output_size"] for g in agree)
-        same = sum(g[o]["digest"] == g[twin]["digest"] for g in agree)
-        lines.append(f"{SHORT[o]} against {SHORT[twin]}, of {len(agree)} cells where both "
-                     f"finished: the same output size in {size}, identical to the bit in {same}.")
     return "\n".join(lines)
 
 

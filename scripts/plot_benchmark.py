@@ -33,34 +33,21 @@ import numpy as np
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.colors import to_rgb  # noqa: E402
-from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.ticker import FixedLocator, FuncFormatter, LogLocator, NullLocator  # noqa: E402
 
 from plot_results import INK, INK_2, MUTED, SURFACE, WRITEUP, WRITEUP_SIZE, style  # noqa: E402
 
 OURS = ("greedy-stabbing-shared", "greedy-stabbing-naive",
-        "greedy-stabbing-naive-paper-boundary", "greedy-stabbing-naive-paper",
-        "greedy-stabbing-no-decomp", "greedy-stabbing-no-decomp-paper-boundary",
-        "greedy-stabbing-no-decomp-paper")
-# The write-up's names: Algorithms 2 and 3, Algorithm 2 on the paper's grid, and each of the three
-# with the paper's own step, which keeps S[p] as a polygon: Direct-Grid is the paper's algorithm.
+        "greedy-stabbing-naive-paper-boundary", "greedy-stabbing-naive-paper")
+# The write-up's names: Algorithms 2 and 3, and Algorithm 2 on the paper's grid.
 SHORT = {"greedy-stabbing-shared": "Algorithm 3 (shared)",
          "greedy-stabbing-naive": "Algorithm 2 (naive)",
          "greedy-stabbing-naive-paper-boundary": "Paper-Boundary",
-         "greedy-stabbing-naive-paper": "Paper-Grid",
-         "greedy-stabbing-no-decomp": "Direct-m-gon",
-         "greedy-stabbing-no-decomp-paper-boundary": "Direct-Boundary",
-         "greedy-stabbing-no-decomp-paper": "Direct-Grid"}
-# A direct stabber is drawn as its decomposed twin is, dashed.
-TWIN = {"greedy-stabbing-no-decomp": "greedy-stabbing-naive",
-        "greedy-stabbing-no-decomp-paper-boundary": "greedy-stabbing-naive-paper-boundary",
-        "greedy-stabbing-no-decomp-paper": "greedy-stabbing-naive-paper"}
+         "greedy-stabbing-naive-paper": "Paper-Grid"}
 BAR = "#2a78d6"
 SERIES = {"greedy-stabbing-shared": "#2a78d6", "greedy-stabbing-naive": "#eb6834",
           "greedy-stabbing-naive-paper-boundary": "#1baf7a",
           "greedy-stabbing-naive-paper": "#eda100"}
-SERIES.update({o: SERIES[t] for o, t in TWIN.items()})
-DASH = (0, (3, 1.6))
 # Blue 250 to 650, light to dark as eps shrinks and the work grows; 250 is the lightest an
 # ordinal step may be on this surface.
 RAMP = ("#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281")
@@ -69,18 +56,12 @@ RAMP = ("#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281")
 WRITEUP_FRAME = {"bottom": 0.17, "top": 0.98, "right": 0.97}
 NAME = {"greedy-stabbing-shared": "Algorithm 3", "greedy-stabbing-naive": "Algorithm 2",
         "greedy-stabbing-naive-paper-boundary": "Paper-Boundary",
-        "greedy-stabbing-naive-paper": "Paper-Grid",
-        "greedy-stabbing-no-decomp": r"Direct-$m$-gon",
-        "greedy-stabbing-no-decomp-paper-boundary": "Direct-Boundary",
-        "greedy-stabbing-no-decomp-paper": "Direct-Grid"}
-# Told apart in grey print too; a direct stabber has its twin's marker, hollow.
+        "greedy-stabbing-naive-paper": "Paper-Grid"}
+# Told apart in grey print too.
 MARKER = {"greedy-stabbing-shared": "o", "greedy-stabbing-naive": "s",
           "greedy-stabbing-naive-paper-boundary": "^", "greedy-stabbing-naive-paper": "D"}
-MARKER.update({o: MARKER[t] for o, t in TWIN.items()})
-# The ridgeline's rows, bottom up, each direct stabber over its twin.
-ROWS = ("greedy-stabbing-shared", "greedy-stabbing-naive", "greedy-stabbing-no-decomp",
-        "greedy-stabbing-naive-paper-boundary", "greedy-stabbing-no-decomp-paper-boundary",
-        "greedy-stabbing-naive-paper", "greedy-stabbing-no-decomp-paper")
+# The ridgeline's rows, bottom up.
+ROWS = OURS
 
 
 def ns(x):
@@ -290,38 +271,23 @@ def writeup_eps(data, eps_list, path):
     fig, ax = plt.subplots(figsize=WRITEUP_SIZE)
     fig.subplots_adjust(left=0.16, **WRITEUP_FRAME)
     xs = sorted(eps_list)
-    # A direct stabber dashed over its twin, hollow and without a band, as its spread is its
-    # twin's; only the four decomposed ones are named, and a key tells dashed from solid.
     at = {}
     for o in OURS:
         cells = [data[(o, eps)]["values"] for eps in xs]
         mid = [median(v) for v in cells]
         at[o] = math.sqrt(mid[-1] * mid[-2])
-        if o in TWIN:
-            ax.plot(xs, mid, color=SERIES[o], linewidth=1.0, linestyle=DASH, marker=MARKER[o],
-                    markersize=3.2, markerfacecolor="white", markeredgecolor=SERIES[o],
-                    markeredgewidth=0.8)
-            continue
         ax.fill_between(xs, [quantile(v, 0.1) for v in cells], [quantile(v, 0.9) for v in cells],
                         color=SERIES[o], alpha=0.2, linewidth=0)
         ax.plot(xs, mid, color=SERIES[o], linewidth=1.2, marker=MARKER[o], markersize=3.5,
                 markeredgecolor="white", markeredgewidth=0.6)
     # Each name halfway between the two coarsest eps: under its line, in its band, when nothing
-    # is within half a decade below, else over the line and its dashed twin, never between them.
-    twin_of = {t: o for o, t in TWIN.items()}
-    for o in (o for o in OURS if o not in TWIN):
-        pair = [at[o]] + ([at[twin_of[o]]] if o in twin_of else [])
-        under = [y for y in at.values() if y < min(pair)]
-        below = not under or math.log10(min(pair) / max(under)) >= 0.5
-        ax.annotate(NAME[o], ((xs[-1] + xs[-2]) / 2, min(pair) if below else max(pair)),
+    # is within half a decade below, else over the line.
+    for o in OURS:
+        under = [y for y in at.values() if y < at[o]]
+        below = not under or math.log10(at[o] / max(under)) >= 0.5
+        ax.annotate(NAME[o], ((xs[-1] + xs[-2]) / 2, at[o]),
                     xytext=(0, -5 if below else 4), textcoords="offset points", ha="center",
                     va="top" if below else "bottom", fontsize=7)
-    key = [Line2D([], [], color=INK_2, linewidth=1.2, marker="o", markersize=3.5,
-                  markeredgecolor="white", markeredgewidth=0.6, label="decomposed"),
-           Line2D([], [], color=INK_2, linewidth=1.0, linestyle=DASH, marker="o",
-                  markersize=3.2, markerfacecolor="white", markeredgecolor=INK_2,
-                  markeredgewidth=0.8, label="direct")]
-    ax.legend(handles=key, loc="upper left", frameon=False, fontsize=7, handlelength=2.6)
     span = xs[-1] - xs[0]
     ax.set_xlim(xs[-1] + 0.04 * span, xs[0] - 0.04 * span)
     ax.xaxis.set_major_locator(FixedLocator(xs))
@@ -368,10 +334,8 @@ def writeup_distributions(data, eps_list, path):
             # Without the flat tails, which would draw over the baseline the whole width.
             seen = np.nonzero(y > 0.004)[0]
             part = slice(seen[0], seen[-1] + 1)
-            ax.fill_between(x[part], row, row + y[part], color=color,
-                            alpha=0.08 if o in TWIN else 0.15, linewidth=0)
-            ax.plot(x[part], row + y[part], color=color, linewidth=0.8 if o in TWIN else 0.9,
-                    linestyle=DASH if o in TWIN else "solid")
+            ax.fill_between(x[part], row, row + y[part], color=color, alpha=0.15, linewidth=0)
+            ax.plot(x[part], row + y[part], color=color, linewidth=0.9)
         values = [data[(o, e)]["values"] for e in eps_list]
         # The lower rows have room on the right, the upper ones on the left.
         if row < len(ROWS) / 2:
