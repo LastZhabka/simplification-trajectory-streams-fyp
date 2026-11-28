@@ -1,4 +1,4 @@
-// ssk_size_match, step 11: ours bisected on delta to each baseline's size, its error measured.
+// ssk_size_match, step 9: ours bisected on delta to each baseline's size, its error measured.
 #include "size.hpp"
 #include "match.hpp"
 #include "measure.hpp"

@@ -1,4 +1,4 @@
-// ssk_match, steps 7 and 9: ours at a baseline's measured error, d*. Every number of the
+// ssk_match, steps 7 and 8: ours at a baseline's measured error, d*. Every number of the
 // comparison passes through match(), and through the two documents it writes.
 #include "match.hpp"
 #include "measure.hpp"

@@ -24,7 +24,6 @@ add_library(ssk
   src/algo/simplify/dots.cpp
   src/algo/simplify/greedy_stabber/greedy_stabber.cpp
   src/algo/simplify/greedy_stabber/greedy_stabber_decomp.cpp
-  src/algo/simplify/greedy_stabber/greedy_stabber_no_decomp.cpp
   src/algo/simplify/squish.cpp
   src/algo/simplify/squish_e.cpp
 )

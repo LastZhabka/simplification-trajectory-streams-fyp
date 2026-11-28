@@ -16,7 +16,7 @@
 // it stopped.
 //
 // --unscaled-delta runs ours at delta = d* instead of d* / (1 + eps): within (1 + eps) d*, so
-// with more error than the baseline, and with its size bound against kappa(d*). It is step 9
+// with more error than the baseline, and with its size bound against kappa(d*). It is step 8
 // of docs/running.md, and writes under data/error-matched-unscaled unless --out says else.
 #include <algorithm>
 #include <chrono>

@@ -28,10 +28,7 @@ namespace ssk::pipelines {
 // The first is the default.
 inline const std::vector<std::string> kOurs{"greedy-stabbing-shared", "greedy-stabbing-naive",
                                             "greedy-stabbing-naive-paper",
-                                            "greedy-stabbing-naive-paper-boundary",
-                                            "greedy-stabbing-no-decomp",
-                                            "greedy-stabbing-no-decomp-paper",
-                                            "greedy-stabbing-no-decomp-paper-boundary"};
+                                            "greedy-stabbing-naive-paper-boundary"};
 
 // The implementation of ours named `ours`, one of kOurs, with params {"delta", "eps"}.
 [[nodiscard]] std::unique_ptr<simplify::Simplifier<2>> make_ours(const std::string& ours,

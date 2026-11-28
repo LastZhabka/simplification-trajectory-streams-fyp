@@ -1,4 +1,4 @@
-// Ours at the size of every baseline run that ssk_frechet measured -- step 11 of
+// Ours at the size of every baseline run that ssk_frechet measured -- step 9 of
 // docs/running.md.
 //
 //   ssk_size_match --in data/trajectories/mopsi --eps 0.1 [--ours greedy-stabbing-shared]

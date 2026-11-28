@@ -1,4 +1,4 @@
-// Ours at each baseline's size -- step 11 of docs/running.md, the protocol "fix size, compare
+// Ours at each baseline's size -- step 9 of docs/running.md, the protocol "fix size, compare
 // error" of docs/comparison.md.
 //
 // ssk_frechet measured each baseline at its budget, N / 2^m vertices or a point or two under, at
