@@ -162,81 +162,54 @@ operating point) pairs where our result is both smaller and no less accurate. It
 ties, unreachable budgets and short trajectories, and it is the claim least sensitive to how
 the grid was chosen.
 
-## Fixing the error instead
-
-The second row of that table is now run too, as step 8 of [running.md](running.md). It asks the
-question a user with an error budget asks: **given T, who keeps fewer vertices?**
-
-- **The target** is T = f · the trajectory's bounding-box diagonal, f ∈ {0.0003, 0.001, 0.003,
-  0.01, 0.03}. Step 6's errors are in the dataset's own units, which an absolute T cannot span;
-  a fraction of the diagonal can, and these five, half a decade apart, cover the medians of
-  step 6's d*/diagonal at m2…m6 (8·10⁻⁴ to 2.5·10⁻²). The level is to this protocol what m is
-  to the first.
-- **Every baseline is searched**, which the error-matched pairing avoided for all but DOTS: the
-  fewest vertices its own knob gives within T, by bisection decided exactly with
-  `Frechet::within`. None of the four is monotone in its knob, so the bisection finds a
-  boundary — one vertex fewer, at that knob, breaks T — rather than a proven minimum. That
-  favours ours only where the baseline's true minimum lies elsewhere, which is the honest
-  direction to err in.
-- **Ours runs at δ = T/(1 + ε)**, its guarantee being (1 + ε)δ. So both sides are within the
-  same T, measured, and the comparison is of size alone.
-
-What it gives over the first protocol: both sides get the same error budget, rather than ours
-getting the baseline's measured error. Ours stops being matched to an error the baseline
-happened to reach, and the baselines stop being held to a budget they were not designed for.
-Each pair's ratios are bucketed per (algorithm, level, ε) by `scripts/ratio_buckets.py`
-(step 12), the same way for both protocols.
-
 ## Which δ: inside the error, or at it
 
 Ours is bicriteria. Run at δ it is within (1 + ε)δ and has at most 2κ(δ) − 2 vertices, κ(δ)
-the fewest any simplification within δ can have. So for an error e — the baseline's d*, or a
-target T — there are two ways to run it, and neither puts both guarantees at e:
+the fewest any simplification within δ can have. So for an error e — the baseline's d* — there
+are two ways to run it, and neither puts both guarantees at e:
 
 | δ | ours' error | size bound against | against a baseline held to e |
 |---|---|---|---|
-| e / (1 + ε) — steps 7 and 8 | ≤ e | κ(e / (1 + ε)) ≥ κ(e) | the same error: fair |
-| e — steps 9 and 10 | ≤ (1 + ε) e | κ(e) | ours allowed up to ε · e more |
+| e / (1 + ε) — step 7 | ≤ e | κ(e / (1 + ε)) ≥ κ(e) | the same error: fair |
+| e — step 8 | ≤ (1 + ε) e | κ(e) | ours allowed up to ε · e more |
 
 Making the second fair to the baseline means holding the baseline to (1 + ε)e as well, which is
 the first with the error relabelled: whichever row is run, the size bound is against κ at the
 error divided by 1 + ε. That is the algorithm, not the protocol.
 
-**Steps 7 and 8 are the comparison**: both sides within the same error, sizes measured. They do
-not lean on the size bound at all, and in theory they disadvantage ours, whose bound is against
-the optimum at a stricter error than the baseline is held to. **Steps 9 and 10 test the
-bound**: with δ the baseline's own error, the baseline is a simplification within δ, so its
-size bounds κ(δ), and Theorem 3 reads as ours ≤ 2 · the baseline's size − 2 in every pair. Read
-their sizes beside its error: ours uses its whole bound, a median 1.00 of it, so in steps 9 and
-10 it really does take up to (1 + ε) times the baseline's error.
+**Step 7 is the comparison**: both sides within the same error, sizes measured. It does not
+lean on the size bound at all, and in theory it disadvantages ours, whose bound is against the
+optimum at a stricter error than the baseline is held to. **Step 8 tests the bound**: with δ
+the baseline's own error, the baseline is a simplification within δ, so its size bounds κ(δ),
+and Theorem 3 reads as ours ≤ 2 · the baseline's size − 2 in every pair. Read its sizes beside
+its error: ours uses nearly its whole bound, a median 1.07–1.10 times d\* at ε = 0.1, so in
+step 8 it really does take up to (1 + ε) times the baseline's error.
 
 **Measured** (2026-11-24, the whole corpus; [results.md](results.md)): the bound held in every
-pair, 0 of 9 041 580 over 2 · the baseline's size − 2. At ε = 0.1, δ = the error makes ours
-smaller than DPn in 64% of pairs at a fixed rate and 59% at a fixed error, against 55% and 51%
-at δ = error/(1 + ε), and moves the median ratios by 0–8 points. It pays in error: ours ends
-over the baseline's error in 92% of step 9's pairs and 89% of step 10's, at a median 1.07–1.10
-times it. And ε acts the other way round. At δ = error/(1 + ε) a smaller ε makes ours a little
+pair, 0 of 4 287 280 over 2 · the baseline's size − 2. At ε = 0.1, δ = the error makes ours
+smaller than DPn in 64% of pairs, against 55% at δ = error/(1 + ε), and moves the median ratios
+by 0–8 points. It pays in error: ours ends over the baseline's error in 92% of step 8's pairs,
+at a median 1.07–1.10 times it. And ε acts the other way round. At δ = error/(1 + ε) a smaller ε makes ours a little
 smaller (against DPn at m2, 94.6% of its size at ε = 0.5, 89.2% at 0.05), as δ comes closer to
 the error; at δ = error a larger ε does (73.5% at 0.5, 86.5% at 0.05), as it buys more error.
 The two meet as ε goes to 0.
 
 ## Fixing the size: ours searched to the baseline's size
 
-Steps 7–10 each hold an error and compare sizes. Step 11 of [running.md](running.md) holds the
-size instead: **at the baseline's own number of vertices, whose curve is closer?**
+Steps 7 and 8 each hold an error and compare sizes. Step 9 of [running.md](running.md) holds
+the size instead: **at the baseline's own number of vertices, whose curve is closer?**
 
 - **The size** is the baseline's at each rate of step 6, its achieved count rather than the
   target ⌈N/2^m⌉, so SQUISH-E's and DOTS' misses under the budget count against ours, not for
   it.
-- **Ours is searched**, as the baselines are in step 8: a bisection on δ for the smallest δ
-  found at which ours has at most that many vertices, to 10⁻⁹ of the diagonal, the tolerance of
-  every measured distance. Ours' size is not proven monotone in δ, so like step 8's this is a
-  boundary, not a proven minimum. It costs ours its one-pass property, as the search costs DOTS
+- **Ours is searched**: a bisection on δ for the smallest δ found at which ours has at most
+  that many vertices, to 10⁻⁹ of the diagonal, the tolerance of every measured distance. Ours'
+  size is not proven monotone in δ, so this is a boundary, not a proven minimum. It costs ours its one-pass property, as the search costs DOTS
   its own: the numbers describe the simplification, not a streaming run.
-- **ε is fixed at 0.1.** It plays no part in the search, and steps 7–10 show it moves the sizes
-  little.
+- **ε is fixed at 0.1.** It plays no part in the search, and steps 7 and 8 show it moves the
+  sizes little.
 
-What it gives over steps 7–10: the error ours needs, not the size it saves. Ours is bicriteria,
+What it gives over steps 7 and 8: the error ours needs, not the size it saves. Ours is bicriteria,
 so its error at a size is (1 + ε) times a δ the size bound alone would not reveal, and this
 protocol measures it directly.
 

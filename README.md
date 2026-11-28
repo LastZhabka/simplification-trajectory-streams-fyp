@@ -234,8 +234,8 @@ mirrors the first one document for document.
 baseline's measured error. Ours is then no worse than the baseline, and the question is how
 many vertices it needs. It measures ours in the same pass and checks the bound exactly.
 `--ours` picks the implementation, `greedy-stabbing-shared` by default, `greedy-stabbing-naive`,
-`greedy-stabbing-naive-paper` or `greedy-stabbing-naive-paper-boundary`, or the same three with
-`no-decomp` for `naive`, and each gets its own tree.
+`greedy-stabbing-naive-paper` or `greedy-stabbing-naive-paper-boundary`, and each gets its own
+tree.
 
 **`scripts/comparison_stats.py`** turns the summaries into the tables: coverage, each
 baseline's error at a fixed rate, ours against each baseline, and Theorem 3 checked, with each

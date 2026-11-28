@@ -1,8 +1,8 @@
-# Experiment 5: fixed size, ours searched to the baseline's size
+# Experiment 3: fixed size, ours searched to the baseline's size
 
 ## The experiment
 
-Step 11 of [running.md](../running.md), experiment 5 of the write-up's Appendix C.
+Step 9 of [running.md](../running.md), experiment 3 of the write-up's Appendix C.
 
 - **The baselines' side is experiment 1's**, unchanged and not rerun:
   - every trajectory of the corpus (47 916 trajectories, 47 102 992 vertices) is simplified by
@@ -27,7 +27,7 @@ trajectory with at most as many vertices.
 ## Where the data is
 
 - `data/size-matched/greedy-stabbing-shared/eps0.1/summary/<dataset>/<name>.json`: one per
-  trajectory, written by `ssk_size_match` (step 11).
+  trajectory, written by `ssk_size_match` (step 9).
   - Each entry of `pairs` has `algorithm`, `m`, `baseline.output_size`, `baseline.distance`
     (d\*) and `baseline.tolerance`.
   - It also has `ours.delta` (the δ found), `ours.output_size`, `ours.distance`,
@@ -37,7 +37,7 @@ trajectory with at most as many vertices.
 - Ours' curves are beside the summaries, under `<algorithm>/<dataset>/m<m>/`, each with the
   baseline document it was fitted to under `matched`.
 - The tables below are written by `scripts/ratio_percentiles.py`, with the distance ratio of
-  `scripts/ratio_buckets.py` (step 12).
+  `scripts/ratio_buckets.py` (step 10).
 
 ## How to read the tables
 
@@ -143,7 +143,7 @@ in the distance, so the two experiments together give both sides of the trade-of
   - Ours is within the two tolerances in 5 839 of them. Those count as ties (100), since a
     ratio of two numbers below the tolerance is noise.
   - The other 86 are the exact baselines of the previous item, and they keep their ratio.
-- **ε = 0.1 only.** Experiments 1–4 show that ε moves the sizes by a few points.
+- **ε = 0.1 only.** Experiments 1 and 2 show that ε moves the sizes by a few points.
 - **The baselines' caveats are experiment 1's:**
   - their outputs are subsequences;
   - none minimises the Fréchet distance;

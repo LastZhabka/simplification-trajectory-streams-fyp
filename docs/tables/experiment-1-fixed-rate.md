@@ -36,7 +36,7 @@ vertices over the baseline's, in percent. Under 100, ours is smaller at the same
   baselines' curves are in `data/simplified-trajectories/`, and their distances in
   `data/frechet-distances/`.
 - The tables below are written by `scripts/ratio_percentiles.py`, with the ratios of
-  `scripts/ratio_buckets.py` (step 12).
+  `scripts/ratio_buckets.py` (step 10).
 
 ## How to read the tables
 
@@ -313,7 +313,7 @@ on most pairs (the low percentiles) and how bad its worst pairs are (p95, p99, w
 - **d\* is whatever error the baseline happened to reach**, and ours is held within it.
   - Ours' size bound is against κ(d\*/(1 + ε)), the optimum at a stricter error than the
     baseline's, so nothing bounds the worst column by twice the baseline. That bound is what
-    experiment 3 tests.
+    experiment 2 tests.
   - **The worst column** is 1 000–2 933% depending on ε (1 200% at ε = 0.1). At ε = 0.1, 193
     of the 197 pairs over 300% are on NGSIM Peachtree. There a baseline keeps 3 or 4 vertices,
     and ours, held a factor 1 + ε under that baseline's error, needs 30 or more. These tables
@@ -333,5 +333,4 @@ on most pairs (the low percentiles) and how bad its worst pairs are (p95, p99, w
   Ours is then asked for a δ of a few ulps, and keeps the distinct points
   ([running.md](../running.md), step 7, *The precision floor*).
 - **Pooled over nine datasets** of very different shapes. The tables per dataset are in
-  `data/ratio-buckets.json`, and the medians per dataset in the write-up's Table
-  `tab:cmp-datasets`.
+  `data/ratio-buckets.json`, and the medians per dataset in [results.md](../results.md).

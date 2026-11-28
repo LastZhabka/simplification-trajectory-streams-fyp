@@ -32,10 +32,7 @@ data/simplified-trajectories/
 data/frechet-distances/
 data/error-matched/
 data/benchmark/
-data/target-simplified/
-data/target-matched/
 data/error-matched-unscaled/
-data/target-matched-unscaled/
 data/size-matched/
 data/ratio-buckets.*
 data/plots/

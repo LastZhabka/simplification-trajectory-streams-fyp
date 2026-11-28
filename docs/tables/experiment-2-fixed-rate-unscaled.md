@@ -1,8 +1,8 @@
-# Experiment 3: fixed compression rate, ours at δ = d\*
+# Experiment 2: fixed compression rate, ours at δ = d\*
 
 ## The experiment
 
-Step 9 of [running.md](../running.md), experiment 3 of the write-up's Appendix C.
+Step 8 of [running.md](../running.md), experiment 2 of the write-up's Appendix C.
 
 - **The baselines' side is experiment 1's**, unchanged and not rerun:
   - every trajectory of the corpus (47 916 trajectories, 47 102 992 vertices) is simplified by
@@ -20,14 +20,14 @@ vertices over the baseline's, in percent.
 ## Where the data is
 
 - `data/error-matched-unscaled/greedy-stabbing-shared/eps<ε>/summary/<dataset>/<name>.json`:
-  one per trajectory and ε, written by `ssk_match --unscaled-delta` (step 9). It has the shape
+  one per trajectory and ε, written by `ssk_match --unscaled-delta` (step 8). It has the shape
   of experiment 1's: each entry of `pairs` has `algorithm`, `m`, `baseline.output_size`,
   `baseline.distance`, `ours.delta` (= d\*), `ours.output_size`, `ours.distance` and
   `ours.within_bound`. Its `delta_rule` is `d*`.
 - Ours' curves are beside the summaries, under `<algorithm>/<dataset>/m<m>/`. The baselines'
   are in `data/simplified-trajectories/` and `data/frechet-distances/`.
 - The tables below are written by `scripts/ratio_percentiles.py`, with the ratios of
-  `scripts/ratio_buckets.py` (step 12).
+  `scripts/ratio_buckets.py` (step 10).
 
 ## How to read the tables
 
